@@ -86,7 +86,11 @@ class WERAugment(object):
 
 class ToTensor(object):
     def __call__(self, video):
+        if not video:  # Check if video is empty
+            return video
         if isinstance(video, list):
+            if len(video) == 0:  # Additional check for empty list
+                return video
             video = np.array(video)
             video = torch.from_numpy(video.transpose((0, 3, 1, 2))).float()
         if isinstance(video, np.ndarray):
@@ -115,14 +119,22 @@ class RandomCrop(object):
         self.size = size
 
     def __call__(self, clip):
+        if not clip:  # Check if clip is empty
+            return clip
+
         crop_h, crop_w = self.size
-        if isinstance(clip[0], np.ndarray):
-            im_h, im_w, im_c = clip[0].shape
-        elif isinstance(clip[0], PIL.Image.Image):
-            im_w, im_h = clip[0].size
-        else:
-            raise TypeError('Expected numpy.ndarray or PIL.Image' +
-                            'but got list of {0}'.format(type(clip[0])))
+        try:
+            if isinstance(clip[0], np.ndarray):
+                im_h, im_w, im_c = clip[0].shape
+            elif isinstance(clip[0], PIL.Image.Image):
+                im_w, im_h = clip[0].size
+            else:
+                raise TypeError('Expected numpy.ndarray or PIL.Image' +
+                                'but got list of {0}'.format(type(clip[0])))
+        except IndexError:
+            print("Empty clip or invalid index in RandomCrop")
+            return clip
+
         if crop_w > im_w:
             pad = crop_w - im_w
             clip = [np.pad(img, ((0, 0), (pad // 2, pad - pad // 2), (0, 0)), 'constant', constant_values=0) for img in
@@ -153,10 +165,15 @@ class CenterCrop(object):
             self.size = size
 
     def __call__(self, clip):
+        if not clip:  # Check if clip is empty
+            return clip
         try:
             im_h, im_w, im_c = clip[0].shape
         except ValueError:
             print(clip[0].shape)
+        except IndexError:
+            print("Empty clip or invalid index")
+            return clip
         new_h, new_w = self.size
         new_h = im_h if new_h >= im_h else new_h
         new_w = im_w if new_w >= im_w else new_w
@@ -171,6 +188,8 @@ class RandomHorizontalFlip(object):
 
     def __call__(self, clip):
         # B, H, W, 3
+        if not clip:  # Check if clip is empty
+            return clip
         flag = random.random() < self.prob
         if flag:
             clip = np.flip(clip, axis=2)
@@ -208,14 +227,21 @@ class RandomRotation(object):
         Returns:
         PIL.Image or numpy.ndarray: Cropped list of images
         """
+        if not clip:  # Check if clip is empty
+            return clip
+
         angle = random.uniform(self.degrees[0], self.degrees[1])
-        if isinstance(clip[0], np.ndarray):
-            rotated = [scipy.misc.imrotate(img, angle) for img in clip]
-        elif isinstance(clip[0], PIL.Image.Image):
-            rotated = [img.rotate(angle) for img in clip]
-        else:
-            raise TypeError('Expected numpy.ndarray or PIL.Image' +
-                            'but got list of {0}'.format(type(clip[0])))
+        try:
+            if isinstance(clip[0], np.ndarray):
+                rotated = [scipy.misc.imrotate(img, angle) for img in clip]
+            elif isinstance(clip[0], PIL.Image.Image):
+                rotated = [img.rotate(angle) for img in clip]
+            else:
+                raise TypeError('Expected numpy.ndarray or PIL.Image' +
+                                'but got list of {0}'.format(type(clip[0])))
+        except IndexError:
+            print("Empty clip or invalid index in RandomRotation")
+            return clip
         return rotated
 
 
@@ -227,7 +253,11 @@ class TemporalRescale(object):
         self.U = 1.0 + temp_scaling
 
     def __call__(self, clip):
+        if not clip:  # Check if clip is empty
+            return clip
         vid_len = len(clip)
+        if vid_len == 0:  # Additional check for empty clip
+            return clip
         new_len = int(vid_len * (self.L + (self.U - self.L) * np.random.random()))
         if new_len < self.min_len:
             new_len = self.min_len
@@ -257,12 +287,22 @@ class RandomResize(object):
         self.interpolation = interp
 
     def __call__(self, clip):
+        if not clip:  # Check if clip is empty
+            return clip
+
         scaling_factor = random.uniform(1 - self.rate, 1 + self.rate)
 
-        if isinstance(clip[0], np.ndarray):
-            im_h, im_w, im_c = clip[0].shape
-        elif isinstance(clip[0], PIL.Image.Image):
-            im_w, im_h = clip[0].size
+        try:
+            if isinstance(clip[0], np.ndarray):
+                im_h, im_w, im_c = clip[0].shape
+            elif isinstance(clip[0], PIL.Image.Image):
+                im_w, im_h = clip[0].size
+            else:
+                raise TypeError('Expected numpy.ndarray or PIL.Image' +
+                                'but got list of {0}'.format(type(clip[0])))
+        except IndexError:
+            print("Empty clip or invalid index in RandomResize")
+            return clip
 
         new_w = int(im_w * scaling_factor)
         new_h = int(im_h * scaling_factor)
@@ -303,14 +343,23 @@ class Resize(object):
         self.interpolation = interp
 
     def __call__(self, clip):
+        if not clip:  # Check if clip is empty
+            return clip
         if self.rate == 1.0:
             return clip
         scaling_factor = self.rate
 
-        if isinstance(clip[0], np.ndarray):
-            im_h, im_w, im_c = clip[0].shape
-        elif isinstance(clip[0], PIL.Image.Image):
-            im_w, im_h = clip[0].size
+        try:
+            if isinstance(clip[0], np.ndarray):
+                im_h, im_w, im_c = clip[0].shape
+            elif isinstance(clip[0], PIL.Image.Image):
+                im_w, im_h = clip[0].size
+            else:
+                raise TypeError('Expected numpy.ndarray or PIL.Image' +
+                                'but got list of {0}'.format(type(clip[0])))
+        except IndexError:
+            print("Empty clip or invalid index in Resize")
+            return clip
 
         new_w = int(im_w * scaling_factor) if scaling_factor>0 and scaling_factor<=1 else int(scaling_factor)
         new_h = int(im_h * scaling_factor) if scaling_factor>0 and scaling_factor<=1 else int(scaling_factor)

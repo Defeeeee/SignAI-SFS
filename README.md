@@ -63,6 +63,22 @@ To evaluate the pretrained model, run the command below:
 python main.py --device 0 --dataset phoenix2014 --phase test --load-weights ./best_checkpoints/phoenix2014_dev_18.01_test_18.28.pt --work-dir ./work_dir/phoenix2014_test/
 ```
 
+### Apple Silicon (M1/M2/M3) Support
+The code automatically sets the environment variable `PYTORCH_ENABLE_MPS_FALLBACK=1` when running on Apple Silicon devices. This allows operations not supported by MPS (Metal Performance Shaders) to fall back to CPU automatically.
+
+If you encounter errors related to unsupported operations on MPS, you can manually set this environment variable before running the script:
+
+```bash
+export PYTORCH_ENABLE_MPS_FALLBACK=1
+python main.py --device 0 --dataset phoenix2014 --phase test --load-weights ./best_checkpoints/phoenix2014_dev_18.01_test_18.28.pt --work-dir ./work_dir/phoenix2014_test/
+```
+
+Alternatively, you can force CPU-only execution by setting the device to 'cpu':
+
+```bash
+python main.py --device cpu --dataset phoenix2014 --phase test --load-weights ./best_checkpoints/phoenix2014_dev_18.01_test_18.28.pt --work-dir ./work_dir/phoenix2014_test/
+```
+
 ## Training 
 Before you start training, download the pre-trained SlowFast pkl file by running the following code:
 ```bash
@@ -75,6 +91,15 @@ To train the SlowFastSign model, run the command below:
 python main.py --device 0 --dataset phoenix2014 --loss-weights Slow=0.25 Fast=0.25 --work-dir ./work_dir/phoenix2014/
 ```
 You can check other arguments for training from `utils/parameters.py`
+
+### Apple Silicon Training
+For Apple Silicon users, the same MPS fallback support applies to training as well. You can use the same approaches mentioned in the Inference section:
+
+1. Let the code automatically set the environment variable (default behavior)
+2. Manually set the environment variable: `export PYTORCH_ENABLE_MPS_FALLBACK=1`
+3. Force CPU-only training: `--device cpu`
+
+Note that training on MPS with fallback to CPU for unsupported operations may be slower than pure CPU training in some cases. If you experience performance issues, try using CPU-only mode.
 
 ## Citation
 If you find our work useful for your research, please cite our work with the following bibtex:

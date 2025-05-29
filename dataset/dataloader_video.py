@@ -67,7 +67,23 @@ class BaseFeeder(data.Dataset):
         elif self.dataset == 'CSL-Daily':
             img_folder = os.path.join(self.prefix, fi['folder'])
         img_list = sorted(glob.glob(img_folder))
+
+        # Check if img_list is empty
+        if not img_list:
+            print(f"Warning: No images found in {img_folder}")
+            # Return a dummy image to prevent empty clip errors
+            dummy_img = np.zeros((256, 256, 3), dtype=np.uint8)
+            return [dummy_img], [], fi
+
         img_list = img_list[int(torch.randint(0, self.frame_interval, [1]))::self.frame_interval]
+
+        # Check if img_list is empty after frame_interval sampling
+        if not img_list:
+            print(f"Warning: No images left after frame_interval sampling from {img_folder}")
+            # Return a dummy image to prevent empty clip errors
+            dummy_img = np.zeros((256, 256, 3), dtype=np.uint8)
+            return [dummy_img], [], fi
+
         label_list = []
         for phase in fi['label'].split(" "):
             if phase == '':
@@ -91,7 +107,7 @@ class BaseFeeder(data.Dataset):
         mean = [0.45, 0.45, 0.45]
         std = [0.225, 0.225, 0.225]
         video = ((video.float() / 255.) - 0.45) / 0.225
-        
+
         return video, label
 
     def transform(self):
@@ -127,7 +143,7 @@ class BaseFeeder(data.Dataset):
     def collate_fn(batch):
         batch = [item for item in sorted(batch, key=lambda x: len(x[0]), reverse=True)]
         video, label, info = list(zip(*batch))
-        
+
         left_pad = 0
         last_stride = 1
         total_stride = 1

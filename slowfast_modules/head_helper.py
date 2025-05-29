@@ -63,15 +63,41 @@ class ResNetBasicHead(nn.Module):
             len(inputs) == self.num_pathways
         ), "Input tensor does not contain {} pathway".format(self.num_pathways)
         pool_out = []
+
+        # First, apply average pooling to all pathways
         for pathway in range(self.num_pathways):
             m = getattr(self, "pathway{}_avgpool".format(pathway))
-            pool_out.append(nn.functional.interpolate(m(inputs[pathway]), scale_factor=(self.cfg.SLOWFAST.ALPHA, 1, 1)) if pathway != self.num_pathways-1 \
-                            else m(inputs[pathway]))
+            pool_out.append(m(inputs[pathway]))
+
+        # Get the target temporal size (from the fast pathway, which is the last one)
+        target_size = pool_out[-1].shape[2]
+
+        # Resize all pathways to match the target size
+        for pathway in range(self.num_pathways - 1):  # All except the last (fast) pathway
+            # Use size instead of scale_factor for more precise control
+            pool_out[pathway] = nn.functional.interpolate(
+                pool_out[pathway], 
+                size=(target_size, 1, 1),
+                mode='nearest'
+            )
+
+        # Check that all tensors have the same temporal dimension
+        temporal_sizes = [p.shape[2] for p in pool_out]
+        if len(set(temporal_sizes)) > 1:
+            print(f"Warning: Temporal sizes still don't match after interpolation: {temporal_sizes}")
+            # Force all tensors to have the same size as the last one
+            for i in range(len(pool_out) - 1):
+                pool_out[i] = nn.functional.interpolate(
+                    pool_out[i],
+                    size=(pool_out[-1].shape[2], 1, 1),
+                    mode='nearest'
+                )
+
         x = torch.cat(pool_out, dim=1)
         # (N, C, T, H, W) -> (N, C, T)
         x = x.view(x.shape[:3])
         # Perform dropout.
         if hasattr(self, "dropout"):
             x = self.dropout(x)
-            
+
         return x

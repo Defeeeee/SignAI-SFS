@@ -6,6 +6,10 @@ import sys
 import cv2
 import yaml
 import torch
+
+# Set environment variable for MPS fallback if using Apple Silicon
+if torch.backends.mps.is_available():
+    os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
 import random
 import importlib
 import faulthandler
@@ -19,6 +23,7 @@ from collections import OrderedDict
 
 faulthandler.enable()
 import utils
+from utils.device import GpuDataParallel
 from modules.sync_batchnorm import convert_model
 from seq_scripts import seq_train, seq_eval, seq_feature_generation
 from torch.cuda.amp import autocast as autocast
@@ -50,7 +55,8 @@ class Processor():
         self.save_arg()
         if self.arg.random_fix:
             self.rng = utils.RandomState(seed=self.arg.random_seed)
-        self.device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+        self.device = GpuDataParallel()
+        self.device.set_device(self.arg.device)
         self.recoder = utils.Recorder(self.arg.work_dir, self.arg.print_log, self.arg.log_interval)
         self.dataset = {}
         self.data_loader = {}
@@ -170,7 +176,7 @@ class Processor():
         return model, optimizer
 
     def model_to_device(self, model):
-        model = model.to(self.device)  # Move the model to the correct device
+        model = self.device.model_to_device(model)  # Move the model to the correct device
         return model
 
     def load_model_weights(self, model, weight_path):
@@ -276,4 +282,3 @@ if __name__ == '__main__':
     processor = Processor(args)
     #utils.pack_code("./", args.work_dir)
     processor.start()
-
