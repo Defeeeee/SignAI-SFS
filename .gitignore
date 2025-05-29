@@ -2,3 +2,6 @@
 .DS_Store
 best_checkpoints/
 */.idea/
+.idea/
+ckpt/
+work_dir/
