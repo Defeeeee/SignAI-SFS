@@ -22,6 +22,90 @@ def get_trans_func(name):
     ), "Transformation function '{}' not supported".format(name)
     return trans_funcs[name]
 
+class BasicTransform(nn.Module):
+    """
+    Basic transformation: Tx3x3, 1x3x3, where T is the size of temporal kernel.
+    """
+
+    def __init__(
+        self,
+        dim_in,
+        dim_out,
+        temp_kernel_size,
+        stride,
+        dim_inner=None,
+        num_groups=1,
+        stride_1x1=None,
+        inplace_relu=True,
+        eps=1e-5,
+        bn_mmt=0.1,
+        dilation=1,
+        norm_module=nn.BatchNorm3d,
+        block_idx=0,
+    ):
+        """
+        Args:
+            dim_in (int): the channel dimensions of the input.
+            dim_out (int): the channel dimension of the output.
+            temp_kernel_size (int): the temporal kernel sizes of the first
+                convolution in the basic block.
+            stride (int): the stride of the bottleneck.
+            inplace_relu (bool): if True, calculate the relu on the original
+                input without allocating new memory.
+            eps (float): epsilon for batch norm.
+            bn_mmt (float): momentum for batch norm. Noted that BN momentum in
+                PyTorch = 1 - BN momentum in Caffe2.
+            norm_module (nn.Module): nn.Module for the normalization layer. The
+                default is nn.BatchNorm3d.
+        """
+        super(BasicTransform, self).__init__()
+        self.temp_kernel_size = temp_kernel_size
+        self._inplace_relu = inplace_relu
+        self._eps = eps
+        self._bn_mmt = bn_mmt
+        self._construct(dim_in, dim_out, stride, dilation, norm_module)
+
+    def _construct(self, dim_in, dim_out, stride, dilation, norm_module):
+        # Tx3x3, BN, ReLU.
+        self.a = nn.Conv3d(
+            dim_in,
+            dim_out,
+            kernel_size=[self.temp_kernel_size, 3, 3],
+            stride=[1, stride, stride],
+            padding=[int(self.temp_kernel_size // 2), 1, 1],
+            bias=False,
+        )
+        self.a_bn = norm_module(
+            num_features=dim_out, eps=self._eps, momentum=self._bn_mmt
+        )
+        self.a_relu = nn.ReLU(inplace=self._inplace_relu)
+        # 1x3x3, BN.
+        self.b = nn.Conv3d(
+            dim_out,
+            dim_out,
+            kernel_size=[1, 3, 3],
+            stride=[1, 1, 1],
+            padding=[0, dilation, dilation],
+            dilation=[1, dilation, dilation],
+            bias=False,
+        )
+
+        self.b.final_conv = True
+
+        self.b_bn = norm_module(
+            num_features=dim_out, eps=self._eps, momentum=self._bn_mmt
+        )
+
+        self.b_bn.transform_final_bn = True
+
+    def forward(self, x):
+        x = self.a(x)
+        x = self.a_bn(x)
+        x = self.a_relu(x)
+
+        x = self.b(x)
+        x = self.b_bn(x)
+        return x
 
 class BottleneckTransform(nn.Module):
     """

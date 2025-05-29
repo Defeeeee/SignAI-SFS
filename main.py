@@ -1,6 +1,6 @@
 import os
 
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+# os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 import pdb
 import sys
 import cv2
@@ -50,7 +50,7 @@ class Processor():
         self.save_arg()
         if self.arg.random_fix:
             self.rng = utils.RandomState(seed=self.arg.random_seed)
-        self.device = utils.GpuDataParallel()
+        self.device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
         self.recoder = utils.Recorder(self.arg.work_dir, self.arg.print_log, self.arg.log_interval)
         self.dataset = {}
         self.data_loader = {}
@@ -146,7 +146,6 @@ class Processor():
         }, save_path)
 
     def loading(self):
-        self.device.set_device(self.arg.device)
         print("Loading model")
         model_class = import_class(self.arg.model)
         model = model_class(
@@ -155,7 +154,7 @@ class Processor():
             loss_weights=self.arg.loss_weights,
             load_pkl=self.load_slowfast_pkl,
             slowfast_config=self.arg.slowfast_config,
-            slowfast_args = self.arg.slowfast_args
+            slowfast_args=self.arg.slowfast_args
         )
         shutil.copy2(inspect.getfile(model_class), self.arg.work_dir)
         optimizer = utils.Optimizer(model, self.arg.optimizer_args)
@@ -164,23 +163,20 @@ class Processor():
             self.load_model_weights(model, self.arg.load_weights)
         elif self.arg.load_checkpoints:
             self.load_checkpoint_weights(model, optimizer)
-        model = self.model_to_device(model)
+        model = self.model_to_device(model)  # Ensure the model is moved to the correct device
         self.kernel_sizes = model.conv1d.kernel_size
         print("Loading model finished.")
         self.load_data()
         return model, optimizer
 
     def model_to_device(self, model):
-        model = model.to(self.device.output_device)
-        if len(self.device.gpu_list) > 1:
-            raise ValueError("AMP equipped with DataParallel has to manually write autocast() for each forward function, you can choose to do this by yourself")
-            # model.conv2d = nn.DataParallel(model.conv2d, device_ids=self.device.gpu_list, output_device=self.device.output_device)
-            # model = convert_model(model)
-        model.cuda()
+        model = model.to(self.device)  # Move the model to the correct device
         return model
 
     def load_model_weights(self, model, weight_path):
-        state_dict = torch.load(weight_path)
+        map_location_device = 'mps' if torch.backends.mps.is_available() else 'cpu'
+
+        state_dict = torch.load(weight_path, map_location=torch.device(map_location_device), weights_only=False)
         if len(self.arg.ignore_weights):
             for w in self.arg.ignore_weights:
                 if state_dict.pop(w, None) is not None:
@@ -224,7 +220,7 @@ class Processor():
         if self.arg.dataset == 'CSL':
             dataset_list = zip(["train", "dev"], [True, False])
         elif 'phoenix' in self.arg.dataset:
-            dataset_list = zip(["train", "train_eval", "dev", "test"], [True, False, False, False]) 
+            dataset_list = zip(["train", "train_eval", "dev", "test"], [True, False, False, False])
         elif self.arg.dataset == 'CSL-Daily':
             dataset_list = zip(["train", "train_eval", "dev", "test"], [True, False, False, False])
         for idx, (mode, train_flag) in enumerate(dataset_list):
@@ -243,8 +239,8 @@ class Processor():
             dataset,
             batch_size=self.arg.batch_size if mode == "train" else self.arg.test_batch_size,
             shuffle=train_flag,
+            num_workers=0,
             drop_last=train_flag,
-            num_workers=self.arg.num_worker,  # if train_flag else 0
             collate_fn=self.feeder.collate_fn,
             pin_memory=True,
             worker_init_fn=self.init_fn,
@@ -280,3 +276,4 @@ if __name__ == '__main__':
     processor = Processor(args)
     #utils.pack_code("./", args.work_dir)
     processor.start()
+

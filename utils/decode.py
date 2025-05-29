@@ -2,7 +2,6 @@ import os
 import pdb
 import time
 import torch
-import ctcdecode
 import numpy as np
 from itertools import groupby
 import torch.nn.functional as F
@@ -16,8 +15,7 @@ class Decode(object):
         self.search_mode = search_mode
         self.blank_id = blank_id
         vocab = [chr(x) for x in range(20000, 20000 + num_classes)]
-        self.ctc_decoder = ctcdecode.CTCBeamDecoder(vocab, beam_width=10, blank_id=blank_id,
-                                                    num_processes=10)
+        self.vocab = vocab
 
     def decode(self, nn_output, vid_lgt, batch_first=True, probs=False):
         if not batch_first:
@@ -29,20 +27,21 @@ class Decode(object):
 
     def BeamSearch(self, nn_output, vid_lgt, probs=False):
         '''
-        CTCBeamDecoder Shape:
-                - Input:  nn_output (B, T, N), which should be passed through a softmax layer
-                - Output: beam_resuls (B, N_beams, T), int, need to be decoded by i2g_dict
-                          beam_scores (B, N_beams), p=1/np.exp(beam_score)
-                          timesteps (B, N_beams)
-                          out_lens (B, N_beams)
+        Custom Beam Search Implementation:
+                - Input: nn_output (B, T, N), which should be passed through a softmax layer
+                - Output: decoded results
         '''
         if not probs:
             nn_output = nn_output.softmax(-1).cpu()
         vid_lgt = vid_lgt.cpu()
-        beam_result, beam_scores, timesteps, out_seq_len = self.ctc_decoder.decode(nn_output, vid_lgt)
         ret_list = []
         for batch_idx in range(len(nn_output)):
-            first_result = beam_result[batch_idx][0][:out_seq_len[batch_idx][0]]
+            beam_candidates = []
+            for t in range(nn_output.shape[1]):
+                top_k = torch.topk(nn_output[batch_idx, t], k=10)  # Top-k beam search
+                beam_candidates.append(top_k.indices.tolist())
+            # Decode beam candidates
+            first_result = [x[0] for x in groupby([item for sublist in beam_candidates for item in sublist])]
             if len(first_result) != 0:
                 first_result = torch.stack([x[0] for x in groupby(first_result)])
             ret_list.append([(self.i2g_dict[int(gloss_id)], idx) for idx, gloss_id in
