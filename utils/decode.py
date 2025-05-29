@@ -43,9 +43,15 @@ class Decode(object):
             # Decode beam candidates
             first_result = [x[0] for x in groupby([item for sublist in beam_candidates for item in sublist])]
             if len(first_result) != 0:
-                first_result = torch.stack([x[0] for x in groupby(first_result)])
-            ret_list.append([(self.i2g_dict[int(gloss_id)], idx) for idx, gloss_id in
-                             enumerate(first_result)])
+                # Convert integers to tensors before stacking
+                first_result = torch.tensor(first_result, dtype=torch.long)
+            # Filter out class IDs that are not in the dictionary (like 0, which is often a blank token)
+            result_pairs = []
+            for idx, gloss_id in enumerate(first_result):
+                gloss_id_int = int(gloss_id)
+                if gloss_id_int in self.i2g_dict:
+                    result_pairs.append((self.i2g_dict[gloss_id_int], idx))
+            ret_list.append(result_pairs)
         return ret_list
 
     def MaxDecode(self, nn_output, vid_lgt):
