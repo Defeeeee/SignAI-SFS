@@ -61,7 +61,12 @@ def resize_img(img_path, dsize='210x260px'):
 
 def resize_dataset(video_idx, dsize, info_dict):
     info = info_dict[video_idx]
-    img_list = glob.glob(f"{info_dict['prefix']}/{info['folder']}")
+
+    pathn = os.path.join(info_dict['prefix'], info['folder'])[:-8]
+    pathn = pathn + "/*.png"
+    img_list = glob.glob(pathn)
+    print(f"{pathn} has {len(img_list)} images")
+
     for img_path in img_list:
         rs_img = resize_img(img_path, dsize=dsize)
         rs_img_path = img_path.replace("210x260px", dsize)
@@ -88,7 +93,7 @@ if __name__ == '__main__':
         description='Data process for Visual Alignment Constraint for Continuous Sign Language Recognition.')
     parser.add_argument('--dataset', type=str, default='phoenix2014-T',
                         help='save prefix')
-    parser.add_argument('--dataset-root', type=str, default='/disk1/dataset/PHOENIX-2014-T-release-v3/PHOENIX-2014-T',
+    parser.add_argument('--dataset-root', type=str, default='/Users/defeee/Documents/GitHub/SignAI-SFS/datasets_files/PHOENIX-2014-T/PHOENIX-2014-T',
                         help='path to the dataset')
     parser.add_argument('--annotation-prefix', type=str, default='annotations/manual/PHOENIX-2014-T.{}.corpus.csv',
                         help='annotation prefix')
@@ -121,7 +126,7 @@ if __name__ == '__main__':
             else:
                 for idx in tqdm(video_index):
                     run_cmd(partial(resize_dataset, dsize=args.output_res, info_dict=information), idx)
-                    #resize_dataset(idx, dsize=args.output_res, info_dict=information)
+                    # resize_dataset(idx, dsize=args.output_res, info_dict=information)
     sign_dict = sorted(sign_dict.items(), key=lambda d: d[0])
     save_dict = {}
     for idx, (key, value) in enumerate(sign_dict):
