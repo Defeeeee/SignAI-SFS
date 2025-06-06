@@ -8,3 +8,5 @@ work_dir/
 datasets_files/
 work_dir2/
 dataset/
+.venv/
+.python-version
