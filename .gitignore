@@ -1,0 +1,9 @@
+**/__pycache__
+.DS_Store
+best_checkpoints/
+*/.idea/
+.idea/
+ckpt/
+work_dir/
+datasets_files/
+work_dir2/
