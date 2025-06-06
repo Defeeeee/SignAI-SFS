@@ -85,12 +85,14 @@ class SLRModel(nn.Module):
         else:
             # frame-wise features
             framewise = x
-        
+
         conv1d_outputs = self.conv1d(framewise, len_x)
         lgt = conv1d_outputs['feat_len']
-        
+
         outputs = []
-        for i in range(len(conv1d_outputs['visual_feat'])):
+        num_paths = len(conv1d_outputs['visual_feat'])
+        # Only process available paths (during inference, there's only one path)
+        for i in range(min(num_paths, len(self.temporal_model))):
             tm_outputs = self.temporal_model[i](conv1d_outputs['visual_feat'][i], lgt)
             outputs.append(self.classifier[i](tm_outputs['predictions']))
 
