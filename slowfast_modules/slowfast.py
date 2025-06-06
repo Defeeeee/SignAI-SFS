@@ -301,7 +301,11 @@ def slowfast18(slowfast_path, slowfast_config='SLOWFAST_8x8_R18.yaml', slowfast_
     return model
 
 def slowfast50(slowfast_config='SLOWFAST_8x8_R50.yaml', slowfast_args=[], load_pkl=True, multi=False):
-    cfg = yaml.load(open('slowfast_modules/configs/' + slowfast_config, 'r'), Loader=yaml.FullLoader)
+    if not os.path.isabs(slowfast_config) and not os.path.exists(slowfast_config):
+        config_path = os.path.join('slowfast_modules/configs', slowfast_config)
+    else:
+        config_path = slowfast_config
+    cfg = yaml.load(open(config_path, 'r'), Loader=yaml.FullLoader)
     cfg = CfgNode(cfg)
     if len(slowfast_args) > 0:
         cfg.merge_from_list(slowfast_args)
@@ -311,7 +315,11 @@ def slowfast50(slowfast_config='SLOWFAST_8x8_R50.yaml', slowfast_args=[], load_p
     return model
 
 def slowfast101(slowfast_config='SLOWFAST_64x2_R101_50_50.yaml', slowfast_args=[], load_pkl=True, multi=False):
-    cfg = yaml.load(open('slowfast_modules/configs/' + slowfast_config, 'r'), Loader=yaml.FullLoader)
+    if not os.path.isabs(slowfast_config) and not os.path.exists(slowfast_config):
+        config_path = os.path.join('slowfast_modules/configs', slowfast_config)
+    else:
+        config_path = slowfast_config
+    cfg = yaml.load(open(config_path, 'r'), Loader=yaml.FullLoader)
     cfg = CfgNode(cfg)
     if len(slowfast_args) > 0:
         cfg.merge_from_list(slowfast_args)
