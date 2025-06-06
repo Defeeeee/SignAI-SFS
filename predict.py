@@ -313,6 +313,84 @@ def main():
     else:
         print("No predictions returned")
 
+def predict_sign(folder, weights, config='./configs/phoenix2014-T.yaml',
+             dict_path='./preprocess/phoenix2014-T/gloss_dict.npy', device='cuda:0',
+             search_mode='beam', input_size=224, image_scale=1.0):
+    """
+    Convenience function to run prediction with specified parameters.
+
+    Args:
+        folder (str): Path to the folder containing images
+        weights (str): Path to the model weights file
+        config (str): Path to the config file
+        dict_path (str): Path to the gloss dictionary
+        device (str): Device to use for prediction
+        search_mode (str): Decoding method ('max' or 'beam')
+        input_size (int): Input size for the model
+        image_scale (float): Scale factor for images
+
+    Returns:
+        list: List of predicted sequences
+    """
+    args = argparse.Namespace(
+        folder=folder,
+        weights=weights,
+        config=config,
+        dict_path=dict_path,
+        device=device,
+        search_mode=search_mode,
+        input_size=input_size,
+        image_scale=image_scale
+    )
+    main(args)
+
+def predict_sign(folder, weights, config='./configs/phoenix2014-T.yaml',
+                 dict_path='./preprocess/phoenix2014-T/gloss_dict.npy', device='cuda:0',
+                 search_mode='beam', input_size=224, image_scale=1.0):
+    """
+    Predict sign language from a folder of images and return the predicted string.
+
+    Args:
+        folder (str): Path to the folder containing images
+        weights (str): Path to the model weights file
+        config (str): Path to the config file
+        dict_path (str): Path to the gloss dictionary
+        device (str): Device to use for prediction
+        search_mode (str): Decoding method ('max' or 'beam')
+        input_size (int): Input size for the model
+        image_scale (float): Scale factor for images
+
+    Returns:
+        str: Predicted sentence as a string, or empty string if no prediction
+    """
+    args = argparse.Namespace(
+        folder=folder,
+        weights=weights,
+        config=config,
+        dict_path=dict_path,
+        device=device,
+        search_mode=search_mode,
+        input_size=input_size,
+        image_scale=image_scale
+    )
+    # Load model and weights
+    model, gloss_dict, device_obj = load_model(args)
+    # Process images from the specified folder
+    images, video_length = process_images(args.folder, args.input_size, args.image_scale)
+    # Run prediction using the loaded model
+    predictions = predict(model, images, video_length, device_obj, gloss_dict, args.search_mode)
+    # Return the first prediction as a string
+    if predictions and len(predictions) > 0 and predictions[0]:
+        sentence = " ".join([word for word, _ in predictions[0]])
+        return sentence
+    else:
+        return ""
+
 if __name__ == "__main__":
     # Entry point of the script
     main()
+
+    # print(predict_sign(
+    #     folder='./dataset/phoenix2014-T/features/fullFrame-256x256px/test/01April_2011_Friday_tagesschau-3374',
+    #     weights='./best_checkpoints/phoenix2014-T_dev_17.66_test_18.71.pt',
+    # ))
