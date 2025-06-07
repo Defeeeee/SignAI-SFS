@@ -29,7 +29,7 @@ The objective of this work is the effective extraction of spatial and dynamic fe
 ## Prerequisites
 - Python == 3.8
 - PyTorch == 1.13
-- ctcdecode == 1.0.3 [[parlance/ctcdecode]](https://github.com/parlance/ctcdecode)，for beam search decode.
+- (Optional) ctcdecode == 1.0.3 [[parlance/ctcdecode]](https://github.com/parlance/ctcdecode) for more efficient beam search decoding. If not available, a custom implementation will be used.
 - You can install other required modules by running  
   `pip install -r requirements.txt`
 

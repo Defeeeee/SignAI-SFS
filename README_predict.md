@@ -6,7 +6,7 @@ Based on the codebase analysis, here are the minimum requirements to run the Sig
 ## 1. Python Environment
 - Python 3.8
 - PyTorch 1.13
-- ctcdecode 1.0.3 (for beam search decoding)
+- (Optional) ctcdecode 1.0.3 for more efficient beam search decoding. If not available, a custom implementation will be used.
 - Additional dependencies from requirements.txt:
   ```
   numpy>=1.20.3
