@@ -142,7 +142,7 @@ class TemporalSlowFastFuse(nn.Module):
 
         if self.num_classes != -1:
             self.fc = nn.ModuleList([nn.Linear(self.hidden_size, self.num_classes) for i in range(3)])
-    
+
     def update_lgt(self, lgt):
         feat_len = copy.deepcopy(lgt)
         for ks in self.kernel_size:
@@ -163,11 +163,13 @@ class TemporalSlowFastFuse(nn.Module):
             visual_feat.extend([slow_feat, fast_feat])
         num_paths = len(visual_feat)
         lgt = self.update_lgt(lgt)
+        # Ensure we only process as many paths as we have fc layers for
+        fc_paths = min(num_paths, len(self.fc) if hasattr(self, 'fc') and isinstance(self.fc, nn.ModuleList) else 1)
         logits = None if self.num_classes == -1 \
-                else [self.fc[i](visual_feat[i].transpose(1, 2)).transpose(1, 2) for i in range(num_paths)]
+                else [self.fc[i](visual_feat[i].transpose(1, 2)).transpose(1, 2) for i in range(fc_paths)]
         return {
             "visual_feat": [visual_feat[i].permute(2, 0, 1) for i in range(num_paths)],
-            "conv_logits": [logits[i].permute(2, 0, 1) for i in range(num_paths)],
+            "conv_logits": [logits[i].permute(2, 0, 1) for i in range(fc_paths)],
             "feat_len": lgt.cpu(),
         }
 
@@ -185,7 +187,7 @@ class SlowFastFuse(nn.Module):
         self.slow_conv = nn.Conv1d(slow_input_size, hidden_size // 2, kernel_size=1, stride=1, padding=0)
         self.fc = nn.Linear(hidden_size, num_classes)
         self.fc_intra = nn.ModuleList([nn.Linear(hidden_size // 2, num_classes) for i in range(2)])
-    
+
     def forward(self, frame_feat, lgt):
         slow_path = frame_feat[0]
         fast_path = frame_feat[1]
@@ -195,13 +197,15 @@ class SlowFastFuse(nn.Module):
         inter_feat = torch.cat(intra_feat, dim=1)
         inter_logits = None if self.num_classes == -1 \
             else self.fc(inter_feat.transpose(1, 2)).transpose(1, 2)
+        # Ensure we only process as many paths as we have fc_intra layers for
+        fc_intra_paths = min(len(intra_feat), len(self.fc_intra) if hasattr(self, 'fc_intra') and isinstance(self.fc_intra, nn.ModuleList) else 1)
         intra_logits = None if self.num_classes == -1 \
-            else [self.fc_intra[i](intra_feat[i].transpose(1, 2)).transpose(1, 2) for i in range(len(intra_feat))]
+            else [self.fc_intra[i](intra_feat[i].transpose(1, 2)).transpose(1, 2) for i in range(fc_intra_paths)]
         return {
             "inter_feat": inter_feat.permute(2, 0, 1),
-            "intra_feat": [intra_feat[i].permute(2, 0, 1) for i in range(2)],
+            "intra_feat": [intra_feat[i].permute(2, 0, 1) for i in range(len(intra_feat))],
             "conv_inter_logits": inter_logits.permute(2, 0, 1),
-            "conv_intra_logits": [intra_logits[i].permute(2, 0, 1) for i in range(2)],
+            "conv_intra_logits": [intra_logits[i].permute(2, 0, 1) for i in range(fc_intra_paths)],
             "feat_len": lgt.cpu(),
         }
 
@@ -218,7 +222,7 @@ class FastConv(nn.Module):
         fast_modules = []
         for layer_idx, ks in enumerate(self.kernel_size):
             fast_input_sz = self.fast_input_size if layer_idx == 0 else hidden_size // 2
-            
+
             if ks[0] == 'P':
                 fast_modules.append(nn.MaxPool1d(kernel_size=int(ks[1]), ceil_mode=False))
             elif ks[0] == 'K':
@@ -227,11 +231,11 @@ class FastConv(nn.Module):
                 )
                 fast_modules.append(nn.BatchNorm1d(hidden_size // 2))
                 fast_modules.append(nn.ReLU(inplace=True))
-        
+
         self.fast_conv = nn.Sequential(*fast_modules)
         self.fc = nn.Linear(hidden_size, num_classes)
         self.fc_intra = nn.ModuleList([nn.Linear(hidden_size // 2, num_classes) for i in range(2)])
-    
+
     def update_lgt(self, lgt):
         feat_len = copy.deepcopy(lgt)
         for ks in self.kernel_size:
@@ -241,7 +245,7 @@ class FastConv(nn.Module):
                 feat_len -= int(ks[1]) - 1
                 #pass
         return feat_len
-    
+
     def forward(self, frame_feat, lgt):
         slow_path = frame_feat[0]
         fast_path = frame_feat[1]
@@ -251,12 +255,14 @@ class FastConv(nn.Module):
         inter_feat = torch.cat(intra_feat, dim=1)
         inter_logits = None if self.num_classes == -1 \
             else self.fc(inter_feat.transpose(1, 2)).transpose(1, 2)
+        # Ensure we only process as many paths as we have fc_intra layers for
+        fc_intra_paths = min(len(intra_feat), len(self.fc_intra) if hasattr(self, 'fc_intra') and isinstance(self.fc_intra, nn.ModuleList) else 1)
         intra_logits = None if self.num_classes == -1 \
-            else [self.fc_intra[i](intra_feat[i].transpose(1, 2)).transpose(1, 2) for i in range(len(intra_feat))]
+            else [self.fc_intra[i](intra_feat[i].transpose(1, 2)).transpose(1, 2) for i in range(fc_intra_paths)]
         return {
             "inter_feat": inter_feat.permute(2, 0, 1),
-            "intra_feat": [intra_feat[i].permute(2, 0, 1) for i in range(2)],
+            "intra_feat": [intra_feat[i].permute(2, 0, 1) for i in range(len(intra_feat))],
             "conv_inter_logits": inter_logits.permute(2, 0, 1),
-            "conv_intra_logits": [intra_logits[i].permute(2, 0, 1) for i in range(2)],
+            "conv_intra_logits": [intra_logits[i].permute(2, 0, 1) for i in range(fc_intra_paths)],
             "feat_len": (lgt // 4).cpu(),
         }
