@@ -11,12 +11,24 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from prediction.predict import predict_sign
 
-def video_predict(video_url, weights, config='/home/defe/SlowFastSign/configs/phoenix2014-T.yaml',
-                  dict_path='/home/defe/SlowFastSign/preprocess/phoenix2014-T/gloss_dict.npy', device='cuda:0',
+def video_predict(video_url, weights, config='configs/phoenix2014-T.yaml',
+                  dict_path='preprocess/phoenix2014-T/gloss_dict.npy', device=None,
                   search_mode='beam', input_size=224, image_scale=1.0):
     """
     Downloads a video from a URL, extracts frames using ffmpeg, predicts the sign language, and returns the predicted string.
     """
+    # Automatically detect the best available device
+    if device is None:
+        import torch
+        if torch.cuda.is_available():
+            device = 'cuda:0'
+            print("Using CUDA for inference.")
+        elif hasattr(torch, 'backends') and hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+            device = 'mps'
+            print("Using MPS (Apple Silicon) for inference.")
+        else:
+            device = 'cpu'
+            print("Using CPU for inference.")
     temp_dir = tempfile.mkdtemp()
     video_path = os.path.join(temp_dir, f"{uuid.uuid4()}.mp4")
     frames_dir = os.path.join(temp_dir, "frames")
@@ -58,6 +70,8 @@ def video_predict(video_url, weights, config='/home/defe/SlowFastSign/configs/ph
 
 if __name__ == "__main__":
     # Example usage
+    #video_url="https://res.cloudinary.com/dv4xloi62/video/upload/v1749229375/npmgyj9rjyurw3xfoeqk.mp4"
+    #video_url = "https://res.cloudinary.com/dv4xloi62/video/upload/v1749250766/q8hl3mfw7kef2ncqsmab.mp4"
     video_url = "https://res.cloudinary.com/dv4xloi62/video/upload/v1749217872/t9zjtrvlcnpkhwhaazrg.mp4"
     prediction = video_predict(video_url, weights='./best_checkpoints/phoenix2014-T_dev_17.66_test_18.71.pt')
     print("Predicted Sign Language:", prediction)
