@@ -236,11 +236,25 @@ def process_images(folder_path, input_size=224, image_scale=1.0):
     # Determine the expected frame count based on model architecture
     # This could be made configurable in the future
     # For now, we'll use a function to determine the expected frame count
-    def get_expected_frames(current_count):
-        # Simply return the current count without any modifications
+    def get_expected_frames(current_count, alpha=4):
+        # If the current count is not a multiple of alpha, pad to make it a multiple
+        if current_count % alpha != 0:
+            return current_count + (alpha - (current_count % alpha))
         return current_count
 
-    # Use the actual number of frames without any padding or truncation
+    # Get the expected number of frames (ensuring it's a multiple of alpha)
+    num_frames = transformed_images.size(1)
+    expected_frames = get_expected_frames(num_frames)
+
+    # If padding is needed, add duplicate frames at the end
+    if expected_frames > num_frames:
+        # Create padding by repeating the last frame
+        last_frame = transformed_images[:, -1:, :, :, :]
+        padding_needed = expected_frames - num_frames
+        padding = last_frame.repeat(1, padding_needed, 1, 1, 1)
+        transformed_images = torch.cat([transformed_images, padding], dim=1)
+        print(f"Added {padding_needed} padding frames to make frame count ({num_frames}) a multiple of alpha (4)")
+
     num_frames = transformed_images.size(1)
 
     # Calculate video length (number of frames)
