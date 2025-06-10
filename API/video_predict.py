@@ -11,8 +11,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from prediction.predict import predict_sign
 
-def video_predict(video_url, weights, config='configs/phoenix2014-T.yaml',
-                  dict_path='preprocess/phoenix2014-T/gloss_dict.npy', device=None,
+def video_predict(video_url, weights, config='/Users/defeee/Documents/GitHub/SignAI-SFS/configs/phoenix2014-T.yaml',
+                  dict_path='/Users/defeee/Documents/GitHub/SignAI-SFS/preprocess/phoenix2014-T/gloss_dict.npy', device=None,
                   search_mode='beam', input_size=224, image_scale=1.0):
     """
     Downloads a video from a URL, extracts frames using ffmpeg, predicts the sign language, and returns the predicted string.
@@ -53,6 +53,23 @@ def video_predict(video_url, weights, config='configs/phoenix2014-T.yaml',
         ]
         subprocess.run(ffmpeg_cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
+        # Count the number of extracted frames
+        frame_files = sorted([f for f in os.listdir(frames_dir) if f.endswith('.jpg')])
+        frame_count = len(frame_files)
+
+        # Ensure we have enough frames for the model
+        # The model expects frames in multiples of 2, and needs 4 more frames than provided
+        if frame_count % 2 == 1:
+            # If odd, duplicate the last frame to make it even
+            last_frame = os.path.join(frames_dir, frame_files[-1])
+            shutil.copy(last_frame, os.path.join(frames_dir, f'frame_{frame_count+1:05d}.jpg'))
+            frame_count += 1
+
+        # Add 4 more frames (duplicate the last 4 frames)
+        for i in range(4):
+            last_frame = os.path.join(frames_dir, f'frame_{frame_count-3+i:05d}.jpg')
+            shutil.copy(last_frame, os.path.join(frames_dir, f'frame_{frame_count+1+i:05d}.jpg'))
+
         # Predict sign from frames
         prediction = predict_sign(
             folder=frames_dir,
@@ -71,7 +88,7 @@ def video_predict(video_url, weights, config='configs/phoenix2014-T.yaml',
 if __name__ == "__main__":
     # Example usage
     #video_url="https://res.cloudinary.com/dv4xloi62/video/upload/v1749229375/npmgyj9rjyurw3xfoeqk.mp4"
-    #video_url = "https://res.cloudinary.com/dv4xloi62/video/upload/v1749250766/q8hl3mfw7kef2ncqsmab.mp4"
+    # video_url = "https://res.cloudinary.com/dv4xloi62/video/upload/v1749250766/q8hl3mfw7kef2ncqsmab.mp4"
     video_url = "https://res.cloudinary.com/dv4xloi62/video/upload/v1749217872/t9zjtrvlcnpkhwhaazrg.mp4"
     prediction = video_predict(video_url, weights='./best_checkpoints/phoenix2014-T_dev_17.66_test_18.71.pt')
     print("Predicted Sign Language:", prediction)
