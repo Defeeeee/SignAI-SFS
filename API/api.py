@@ -13,7 +13,7 @@ def predict(video_url: str = Query(..., description="URL of the video to predict
     try:
         prediction = video_predict(
             video_url,
-            weights='/home/defe/SlowFastSign/best_checkpoints/phoenix2014-T_dev_17.66_test_18.71.pt'
+            weights='best_checkpoints/phoenix2014-T_dev_17.66_test_18.71.pt'
         )
         return JSONResponse(content={"prediction": prediction})
     except Exception as e:
