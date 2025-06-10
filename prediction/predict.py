@@ -19,6 +19,7 @@ import glob
 import torch
 import argparse
 import importlib
+import platform
 import numpy as np
 from tqdm import tqdm
 import torch.nn.functional as F
@@ -353,8 +354,8 @@ def main():
         print("No predictions returned")
 
 
-def predict_sign(folder, weights, config='/Users/defeee/Documents/GitHub/SignAI-SFS/configs/phoenix2014-T.yaml',
-                 dict_path='/Users/defeee/Documents/GitHub/SignAI-SFS/preprocess/phoenix2014-T/gloss_dict.npy', device='cuda:0',
+def predict_sign(folder, weights, config='./configs/phoenix2014-T.yaml',
+                 dict_path='./preprocess/phoenix2014-T/gloss_dict.npy', device='cuda:0',
                  search_mode='beam', input_size=224, image_scale=1.0):
     """
     Predict sign language from a folder of images and return the predicted string.
@@ -372,6 +373,12 @@ def predict_sign(folder, weights, config='/Users/defeee/Documents/GitHub/SignAI-
     Returns:
         str: Predicted sentence as a string, or empty string if no prediction
     """
+    # Check if the system is Mac, use absolute paths if it is
+    if platform.system() == 'Darwin':  # Darwin is the system name for macOS
+        # Use absolute paths for Mac
+        base_dir = '/Users/defeee/Documents/GitHub/SignAI-SFS'
+        config = os.path.join(base_dir, 'configs/phoenix2014-T.yaml')
+        dict_path = os.path.join(base_dir, 'preprocess/phoenix2014-T/gloss_dict.npy')
     args = argparse.Namespace(
         folder=folder,
         weights=weights,
@@ -398,9 +405,17 @@ def predict_sign(folder, weights, config='/Users/defeee/Documents/GitHub/SignAI-
 if __name__ == "__main__":
     # Entry point of the script
     try:
+        # Set paths based on system
+        if platform.system() == 'Darwin':  # Mac
+            folder = '/Users/defeee/Documents/GitHub/SignAI-SFS/datasets_files/PHOENIX-2014-T/PHOENIX-2014-T/features/fullFrame-256x256px/test/25October_2010_Monday_tagesschau-17'
+            weights = '/Users/defeee/Documents/GitHub/SignAI-SFS/best_checkpoints/phoenix2014-T_dev_17.66_test_18.71.pt'
+        else:  # Linux or other
+            folder = './datasets_files/PHOENIX-2014-T/PHOENIX-2014-T/features/fullFrame-256x256px/test/25October_2010_Monday_tagesschau-17'
+            weights = './best_checkpoints/phoenix2014-T_dev_17.66_test_18.71.pt'
+
         print(predict_sign(
-            folder='/Users/defeee/Documents/GitHub/SignAI-SFS/datasets_files/PHOENIX-2014-T/PHOENIX-2014-T/features/fullFrame-256x256px/test/25October_2010_Monday_tagesschau-17',
-            weights='/Users/defeee/Documents/GitHub/SignAI-SFS/best_checkpoints/phoenix2014-T_dev_17.66_test_18.71.pt',
+            folder=folder,
+            weights=weights,
         ))
         print("Prediction completed successfully!")
     except Exception as e:
