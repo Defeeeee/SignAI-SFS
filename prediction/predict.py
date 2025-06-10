@@ -236,56 +236,11 @@ def process_images(folder_path, input_size=224, image_scale=1.0):
     # This could be made configurable in the future
     # For now, we'll use a function to determine the expected frame count
     def get_expected_frames(current_count):
-        # Based on our observations, the model expects frames in multiples of 2
-        # If the current count is odd, we'll make it even
-        if current_count % 2 == 1:
-            current_count += 1
+        # Simply return the current count without any modifications
+        return current_count
 
-        # The SlowFast model in our configuration has ALPHA=1, but there's still
-        # an interpolation happening in head_helper.py that's causing a tensor size mismatch.
-        # Based on the error message, we need to add 2 more frames to our calculation.
-
-        # For the specific error case (Expected size 188 but got size 186),
-        # we need to add 2 more frames to the calculation.
-        # This suggests that we need a total of +4 frames from the original count.
-
-        # The model always expects 4 more frames than what's provided
-        return current_count + 4
-
-    current_frames = transformed_images.size(1)
-    expected_frames = get_expected_frames(current_frames)
-
-    # If the current and expected frame counts differ, we need to adjust
-    if current_frames != expected_frames:
-        if current_frames < expected_frames:
-            # Need to pad with additional frames
-            frames_to_pad = expected_frames - current_frames
-            print(f"Padding input from {current_frames} to {expected_frames} frames (adding {frames_to_pad} frames)")
-
-            # Create padding tensor with the required number of frames
-            if frames_to_pad <= current_frames:
-                # If we need to pad fewer frames than we have, just duplicate some frames
-                padding = torch.zeros_like(transformed_images[:, :frames_to_pad])
-            else:
-                # If we need to pad more frames than we have, repeat the existing frames
-                repeats_needed = (frames_to_pad + current_frames - 1) // current_frames
-                repeated_frames = transformed_images.repeat(1, repeats_needed, 1, 1, 1)
-                padding = repeated_frames[:, current_frames:current_frames+frames_to_pad]
-
-            # Concatenate with original tensor
-            transformed_images = torch.cat([transformed_images, padding], dim=1)
-        else:
-            # Need to truncate excess frames
-            frames_to_remove = current_frames - expected_frames
-            print(f"Truncating input from {current_frames} to {expected_frames} frames (removing {frames_to_remove} frames)")
-
-            # Keep only the first expected_frames frames
-            transformed_images = transformed_images[:, :expected_frames]
-
-        # Update the number of frames
-        num_frames = expected_frames
-    else:
-        num_frames = current_frames
+    # Use the actual number of frames without any padding or truncation
+    num_frames = transformed_images.size(1)
 
     # Calculate video length (number of frames)
     video_length = torch.LongTensor([num_frames])
