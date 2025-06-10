@@ -241,14 +241,9 @@ def process_images(folder_path, input_size=224, image_scale=1.0):
         if current_count % 2 == 1:
             return current_count + 1
 
-        # For specific known cases (based on previous issues)
-        if current_count == 138:
-            return 140
-        elif current_count == 152:
-            return 154
-
-        # For other cases, we'll return the current count if it's even
-        return current_count
+        # The model always expects 2 more frames than what's provided
+        # Add 2 frames to all even numbers to match the model's expectation
+        return current_count + 2
 
     current_frames = transformed_images.size(1)
     expected_frames = get_expected_frames(current_frames)
@@ -396,8 +391,8 @@ def main():
         print("No predictions returned")
 
 
-def predict_sign(folder, weights, config='./configs/phoenix2014-T.yaml',
-                 dict_path='./preprocess/phoenix2014-T/gloss_dict.npy', device='cuda:0',
+def predict_sign(folder, weights, config='/Users/defeee/Documents/GitHub/SignAI-SFS/configs/phoenix2014-T.yaml',
+                 dict_path='/Users/defeee/Documents/GitHub/SignAI-SFS/preprocess/phoenix2014-T/gloss_dict.npy', device='cuda:0',
                  search_mode='beam', input_size=224, image_scale=1.0):
     """
     Predict sign language from a folder of images and return the predicted string.
@@ -442,8 +437,8 @@ if __name__ == "__main__":
     # Entry point of the script
     try:
         print(predict_sign(
-            folder='/Users/defeee/Documents/GitHub/SignAI-SFS/datasets_files/PHOENIX-2014-T/PHOENIX-2014-T/features/fullFrame-256x256px/test/05June_2010_Saturday_tagesschau-3932',
-            weights='./best_checkpoints/phoenix2014-T_dev_17.66_test_18.71.pt',
+            folder='/Users/defeee/Documents/GitHub/SignAI-SFS/datasets_files/PHOENIX-2014-T/PHOENIX-2014-T/features/fullFrame-256x256px/test/01October_2010_Friday_tagesschau-2700',
+            weights='/Users/defeee/Documents/GitHub/SignAI-SFS/best_checkpoints/phoenix2014-T_dev_17.66_test_18.71.pt',
         ))
         print("Prediction completed successfully!")
     except Exception as e:
