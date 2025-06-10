@@ -5,18 +5,25 @@ import subprocess
 import uuid
 import shutil
 import requests
+import platform
 
 # Add project root to sys.path for module import
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from prediction.predict import predict_sign
 
-def video_predict(video_url, weights, config='/Users/defeee/Documents/GitHub/SignAI-SFS/configs/phoenix2014-T.yaml',
-                  dict_path='/Users/defeee/Documents/GitHub/SignAI-SFS/preprocess/phoenix2014-T/gloss_dict.npy', device=None,
+def video_predict(video_url, weights, config='./configs/phoenix2014-T.yaml',
+                  dict_path='./preprocess/phoenix2014-T/gloss_dict.npy', device=None,
                   search_mode='beam', input_size=224, image_scale=1.0):
     """
     Downloads a video from a URL, extracts frames using ffmpeg, predicts the sign language, and returns the predicted string.
     """
+    # Check if the system is Mac, use absolute paths if it is
+    if platform.system() == 'Darwin':  # Darwin is the system name for macOS
+        # Use absolute paths for Mac
+        base_dir = '/Users/defeee/Documents/GitHub/SignAI-SFS'
+        config = os.path.join(base_dir, 'configs/phoenix2014-T.yaml')
+        dict_path = os.path.join(base_dir, 'preprocess/phoenix2014-T/gloss_dict.npy')
     # Automatically detect the best available device
     if device is None:
         import torch
@@ -59,7 +66,7 @@ def video_predict(video_url, weights, config='/Users/defeee/Documents/GitHub/Sig
         # Predict sign from frames
         prediction = predict_sign(
             folder=frames_dir,
-            weights=os.path.abspath(os.path.join(os.path.dirname(__file__), '../best_checkpoints/phoenix2014-T_dev_17.66_test_18.71.pt')),
+            weights=weights,
             config=config,
             dict_path=dict_path,
             device=device,
@@ -76,5 +83,12 @@ if __name__ == "__main__":
     #video_url="https://res.cloudinary.com/dv4xloi62/video/upload/v1749229375/npmgyj9rjyurw3xfoeqk.mp4"
     #video_url = "https://res.cloudinary.com/dv4xloi62/video/upload/v1749250766/q8hl3mfw7kef2ncqsmab.mp4"
     video_url = "https://res.cloudinary.com/dv4xloi62/video/upload/v1749217872/t9zjtrvlcnpkhwhaazrg.mp4"
-    prediction = video_predict(video_url, weights='./best_checkpoints/phoenix2014-T_dev_17.66_test_18.71.pt')
+
+    # Set weights path based on system
+    if platform.system() == 'Darwin':  # Mac
+        weights = '/Users/defeee/Documents/GitHub/SignAI-SFS/best_checkpoints/phoenix2014-T_dev_17.66_test_18.71.pt'
+    else:  # Linux or other
+        weights = './best_checkpoints/phoenix2014-T_dev_17.66_test_18.71.pt'
+
+    prediction = video_predict(video_url, weights=weights)
     print("Predicted Sign Language:", prediction)
