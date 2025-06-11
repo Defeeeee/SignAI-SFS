@@ -11,3 +11,4 @@ dataset/
 .venv/
 .python-version
 ctcdecode/
+.venv2/
