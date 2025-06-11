@@ -2,7 +2,12 @@ from fastapi import FastAPI, Query
 from fastapi.responses import JSONResponse
 from video_predict import video_predict
 
+from fastapi.middleware.cors import CORSMiddleware
+
 app = FastAPI()
+app.add_middleware(
+    CORSMiddleware, allow_origins=['null'],
+    allow_credentials=True, allow_methods=['*'], allow_headers=['*'])
 
 @app.get("/")
 def read_root():
