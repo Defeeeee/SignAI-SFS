@@ -12,3 +12,5 @@ dataset/
 .python-version
 ctcdecode/
 .venv2/
+debug_frames/
+test_videos/
