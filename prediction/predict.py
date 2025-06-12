@@ -1,16 +1,4 @@
-"""
-SignAI-SFS Image Folder Prediction Script
 
-This script allows you to use a trained SignAI-SFS model to predict sign language
-from a folder of images. The images should be named in a way that they are sorted
-in the correct temporal order when using the sorted() function.
-
-Example usage:
-    python predict.py --folder /path/to/images --weights /path/to/model_weights.pt
-
-For more options, run:
-    python predict.py --help
-"""
 
 import os
 import sys
@@ -64,26 +52,12 @@ def load_model(args):
     """
     Load the model and its weights from the specified paths.
 
-    This function:
     1. Loads the configuration from the config file
     2. Loads the gloss dictionary from the dict_path
     3. Imports the model class specified in the config
     4. Creates the model with the appropriate parameters
     5. Loads the weights from the weights file
     6. Moves the model to the specified device
-
-    Args:
-        args (argparse.Namespace): Command line arguments containing:
-            - config: Path to the config file
-            - dict_path: Path to the gloss dictionary
-            - weights: Path to the model weights
-            - device: Device to use (cuda:0, mps, cpu)
-
-    Returns:
-        tuple: (model, gloss_dict, device)
-            - model: The loaded model with weights
-            - gloss_dict: The gloss dictionary
-            - device: The device wrapper for moving data to the correct device
     """
     import yaml
     import importlib
@@ -151,12 +125,7 @@ def import_class(name):
     """
     Dynamically import a class from a module.
 
-    Args:
-        name (str): Full path to the class, e.g., 'models.SLRModel'
-
-    Returns:
-        class: The imported class
-    """
+"""
     components = name.rsplit('.', 1)
     mod = importlib.import_module(components[0])
     mod = getattr(mod, components[1])
@@ -174,19 +143,7 @@ def process_images(folder_path, input_size=224, image_scale=1.0):
     5. Normalizes the pixel values
     6. Prepares them for model input
 
-    Args:
-        folder_path (str): Path to the folder containing images
-        input_size (int, optional): Size to crop images to. Defaults to 224.
-        image_scale (float, optional): Scale factor for images. Defaults to 1.0.
-
-    Returns:
-        tuple: (transformed_images, video_length)
-            - transformed_images: Tensor of processed images [batch, channels, frames, height, width]
-            - video_length: Tensor containing the number of frames
-
-    Raises:
-        ValueError: If no image files are found or if none of the images could be read
-    """
+   """
     # Get all image files with common extensions
     extensions = ['jpg', 'jpeg', 'png', 'bmp']
     image_files = []
@@ -271,16 +228,6 @@ def predict(model, images, video_length, device, gloss_dict, search_mode='max'):
     2. Runs the model inference
     3. Decodes the model output into gloss predictions
 
-    Args:
-        model (torch.nn.Module): The loaded model
-        images (torch.Tensor): Processed images tensor [batch, channels, frames, height, width]
-        video_length (torch.Tensor): Tensor containing the number of frames
-        device (GpuDataParallel): Device wrapper for moving data
-        gloss_dict (dict): Dictionary mapping between gloss IDs and words
-        search_mode (str, optional): Decoding method ('max' or 'beam'). Defaults to 'max'.
-
-    Returns:
-        list: List of predicted sequences, where each sequence is a list of (gloss, position) tuples
     """
     # Move data to the appropriate device (GPU/CPU)
     images = device.data_to_device(images)
@@ -374,18 +321,6 @@ def predict_sign(folder, weights, config='./configs/phoenix2014-T.yaml',
     """
     Predict sign language from a folder of images and return the predicted string.
 
-    Args:
-        folder (str): Path to the folder containing images
-        weights (str): Path to the model weights file
-        config (str): Path to the config file
-        dict_path (str): Path to the gloss dictionary
-        device (str): Device to use for prediction
-        search_mode (str): Decoding method ('max' or 'beam')
-        input_size (int): Input size for the model
-        image_scale (float): Scale factor for images
-
-    Returns:
-        str: Predicted sentence as a string, or empty string if no prediction
     """
     # Check if the system is Mac, use absolute paths if it is
     if platform.system() == 'Darwin':  # Darwin is the system name for macOS
