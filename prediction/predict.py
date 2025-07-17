@@ -11,6 +11,7 @@ import platform
 import numpy as np
 from tqdm import tqdm
 import torch.nn.functional as F
+import mediapipe as mp
 
 # Import necessary modules from the project
 import utils
@@ -139,11 +140,22 @@ def process_images(folder_path, input_size=224, image_scale=1.0):
     1. Finds all image files in the specified folder
     2. Sorts them by name (important for temporal order)
     3. Reads and converts them to RGB
-    4. Applies transformations (center crop and conversion to tensor)
-    5. Normalizes the pixel values
-    6. Prepares them for model input
+    4. Uses MediaPipe to detect face and nose keypoint
+    5. Centers each frame on a square around the person's nose
+    6. Applies transformations (center crop and conversion to tensor)
+    7. Normalizes the pixel values
+    8. Prepares them for model input
 
    """
+    # Initialize MediaPipe Face Mesh
+    mp_face_mesh = mp.solutions.face_mesh
+    face_mesh = mp_face_mesh.FaceMesh(
+        static_image_mode=False,
+        max_num_faces=1,
+        min_detection_confidence=0.5,
+        min_tracking_confidence=0.5
+    )
+
     # Get all image files with common extensions
     extensions = ['jpg', 'jpeg', 'png', 'bmp']
     image_files = []
@@ -165,7 +177,45 @@ def process_images(folder_path, input_size=224, image_scale=1.0):
             continue
         # Convert from BGR (OpenCV default) to RGB
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+        # Process the image with MediaPipe Face Mesh
+        results = face_mesh.process(img)
+
+        # If face landmarks are detected, center the frame on the nose
+        if results.multi_face_landmarks:
+            # Get the nose tip landmark (index 1)
+            nose_landmark = results.multi_face_landmarks[0].landmark[1]
+
+            # Get image dimensions
+            h, w, _ = img.shape
+
+            # Calculate nose position in pixels
+            nose_x, nose_y = int(nose_landmark.x * w), int(nose_landmark.y * h)
+
+            # Calculate the square size (use the smaller dimension to ensure the square fits)
+            square_size = min(h, w)
+
+            # Calculate the top-left corner of the square centered on the nose
+            x1 = max(0, nose_x - square_size // 2)
+            y1 = max(0, nose_y - square_size // 2)
+
+            # Adjust if the square goes beyond the image boundaries
+            if x1 + square_size > w:
+                x1 = w - square_size
+            if y1 + square_size > h:
+                y1 = h - square_size
+
+            # Crop the image to the square centered on the nose
+            img = img[y1:y1+square_size, x1:x1+square_size]
+
+            print(f"Centered frame on nose at ({nose_x}, {nose_y})")
+        else:
+            print(f"No face detected in {img_path}, using original frame")
+
         images.append(img)
+
+    # Close the MediaPipe Face Mesh
+    face_mesh.close()
 
     if not images:
         raise ValueError("No valid images found")
