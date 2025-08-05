@@ -94,12 +94,9 @@ DGS Glosses to translate: {prediction}"""
 
         if gemini_response and 'candidates' in gemini_response and gemini_response['candidates']:
             translation = gemini_response['candidates'][0]['content']['parts'][0]['text'].rstrip('\n')
-            gemini_summary = await call_gemini_api(f"""Make a really brief summary of the following text in one sentence of between two and 4 words: {translation}""")
+            gemini_summary = await call_gemini_api(f"""Make a really brief summary encapsling all the content of the following text in one sentence of between two and 4 words: {translation}""")
             if gemini_summary and 'candidates' in gemini_summary and gemini_summary['candidates']:
                 summary = gemini_summary['candidates'][0]['content']['parts'][0]['text'].rstrip('\n')
-                translation += f"\n\nSummary: {summary}"
-            else:
-                translation += "\n\nSummary: Unable to generate summary from Gemini API."
             return JSONResponse(content={"translation": translation,
                                          "summary": summary if 'summary' in locals() else "No summary generated"
                                          })
