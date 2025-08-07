@@ -70,6 +70,8 @@ async def predict_gemini(video_url: str = Query(..., description="URL of the vid
         if not prediction:
             return JSONResponse(content={"error": "No prediction made"}, status_code=400)
 
+        print(f"Model made prediction: {prediction}. This will be sent to Gemini API for translation.")
+
         # Prepare the prompt for Gemini API
         prompt = f"""You are a specialized translator for German Sign Language (DGS) glosses to English.
 
@@ -91,6 +93,8 @@ Instructions:
 
 DGS Glosses to translate: {prediction}"""
         gemini_response = await call_gemini_api(prompt)
+
+        print(f"Done calling Gemini API")
 
         if gemini_response and 'candidates' in gemini_response and gemini_response['candidates']:
             translation = gemini_response['candidates'][0]['content']['parts'][0]['text'].rstrip('\n')

@@ -208,14 +208,17 @@ def process_images(folder_path, input_size=224, image_scale=1.0):
             # Crop the image to the square centered on the nose
             img = img[y1:y1+square_size, x1:x1+square_size]
 
-            print(f"Centered frame on nose at ({nose_x}, {nose_y})")
-        else:
-            print(f"No face detected in {img_path}, using original frame")
+            #print(f"Centered frame on nose at ({nose_x}, {nose_y})")
+        # else:
+        #     #print(f"No face detected in {img_path}, using original frame")
 
         images.append(img)
 
     # Close the MediaPipe Face Mesh
     face_mesh.close()
+
+    # show frames completed framing and how many of the total
+    print(f"Processed {len(images)} frames from {folder_path}")
 
     if not images:
         raise ValueError("No valid images found")
