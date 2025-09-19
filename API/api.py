@@ -166,23 +166,23 @@ async def predict_gemini_v2(video_url: str = Query(..., description="URL of the 
         print(f"Model made prediction: {prediction}. This will be sent to Gemini API for translation.")
 
         # Prepare the prompt for Gemini API
-        prompt = f"""You are a specialized translator for German Sign Language (DGS) glosses to German.
+        prompt = f"""You are a specialized translator for German Sign Language (DGS) glosses to English.
 
-        Task: Translate the following DGS glosses into fluent, natural German.
+        Task: Translate the following DGS glosses into fluent, natural English.
 
         Context: DGS glosses are written representations of sign language where:
         - Words appear in their base form
         - Grammar markers are often omitted
-        - Word order follows DGS syntax, not German syntax
+        - Word order follows DGS syntax, not English syntax
         - Special notation may be used (e.g., POSS for possessive)
 
         Instructions:
         1. Translate the meaning, not word-for-word
-        2. Use proper German grammar and sentence structure
+        2. Use proper English grammar and sentence structure
         3. Maintain the original meaning and intent
-        4. Return ONLY the translated German text, nothing else
+        4. Return ONLY the translated English text, nothing else
         5. Do not include explanations, notes, or any text besides the translation
-        6. Use complete, grammatically correct German sentences
+        6. Use complete, grammatically correct English sentences
 
         DGS Glosses to translate: {prediction}"""
         gemini_response = await call_gemini_api(prompt)
