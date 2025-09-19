@@ -189,13 +189,18 @@ async def predict_gemini_v2(video_url: str = Query(..., description="URL of the 
 
         if gemini_response and 'candidates' in gemini_response and gemini_response['candidates']:
             translation = gemini_response['candidates'][0]['content']['parts'][0]['text'].rstrip('\n')
-            return JSONResponse(content={"translation": translation})
+            gemini_summary = await call_gemini_api(
+                f"""Make a really brief summary encapsling all the content of the following text in one sentence of between two and 4 words: {translation}""")
+            if gemini_summary and 'candidates' in gemini_summary and gemini_summary['candidates']:
+                summary = gemini_summary['candidates'][0]['content']['parts'][0]['text'].rstrip('\n')
+            return JSONResponse(content={"translation": translation,
+                                         "summary": summary if 'summary' in locals() else "No summary generated"
+                                         })
         else:
             return JSONResponse(content={"error": "Failed to get translation from Gemini API, try /predict"},
                                 status_code=500)
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
-
 @app.get("/v2/slowfast/predict")
 def predict_v2(video_url: str = Query(..., description="URL of the video to predict")):
     try:
