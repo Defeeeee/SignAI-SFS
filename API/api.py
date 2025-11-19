@@ -230,6 +230,7 @@ def predict_v2_keypoints(video_url: str = Query(..., description="URL of the vid
 
 # Remote prediction endpoints
 REMOTE_API_URL = "http://100.71.0.60:8082"
+REMOTE_2_API_URL = "http://100.102.136.67:8082"
 
 @app.get("/v2/GPU/predict")
 async def remote_predict(video_url: str = Query(..., description="URL of the video to predict")):
@@ -265,6 +266,47 @@ async def remote_predict_gemini(video_url: str = Query(..., description="URL of 
             return JSONResponse(content={"error": "No prediction received from remote API"}, status_code=400)
 
         logger.info(f"Remote model made prediction: {prediction_text}. This will be sent to local Gemini API for translation.")
+
+        gemini_response = glosses_to_text(prediction_text)
+
+        if gemini_response:
+            translation = gemini_response
+            gemini_summary = custom_prompt(
+                f"""Make a really brief summary encapsling all the content of the following text in one sentence of between two and 4 words: {translation}""")
+            if gemini_summary:
+                summary = gemini_summary
+            return JSONResponse(content={"translation": translation,
+                                         "summary": summary if 'summary' in locals() else "No summary generated"
+                                         })
+        else:
+            return JSONResponse(content={"error": "Failed to get translation from Gemini API"}, status_code=500)
+
+    except Exception as e:
+        logger.error(f"Remote prediction error: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.get("/v2/NPU/predict_gemini")
+async def remote_predict_gemini(video_url: str = Query(..., description="URL of the video to predict")):
+    try:
+        # 1. Get prediction from remote API
+        prediction_text = ""
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"{REMOTE_2_API_URL}/predict", params={"video_url": video_url}) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    prediction_text = data.get("prediction", "")
+                else:
+                    error_text = await response.text()
+                    logger.error(f"Remote API error: {response.status} - {error_text}")
+                    return JSONResponse(content={"error": f"Remote API error: {response.status}"},
+                                        status_code=response.status)
+
+        if not prediction_text:
+            return JSONResponse(content={"error": "No prediction received from remote API"}, status_code=400)
+
+        logger.info(
+            f"Remote model made prediction: {prediction_text}. This will be sent to local Gemini API for translation.")
 
         gemini_response = glosses_to_text(prediction_text)
 
