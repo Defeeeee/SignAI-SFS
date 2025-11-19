@@ -332,6 +332,83 @@ def predict_v2_keypoints(video_url: str = Query(..., description="URL of the vid
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
+# Remote prediction endpoints
+REMOTE_API_URL = "http://100.71.0.60:8082"
+
+@app.get("/v2/GPU/predict")
+async def remote_predict(video_url: str = Query(..., description="URL of the video to predict")):
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"{REMOTE_API_URL}/predict", params={"video_url": video_url}) as response:
+                if response.status == 200:
+                    return await response.json()
+                else:
+                    error_text = await response.text()
+                    logger.error(f"Remote API error: {response.status} - {error_text}")
+                    return JSONResponse(content={"error": f"Remote API error: {response.status}"}, status_code=response.status)
+    except Exception as e:
+        logger.error(f"Remote prediction error: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+@app.get("/v2/GPU/predict_gemini")
+async def remote_predict_gemini(video_url: str = Query(..., description="URL of the video to predict")):
+    try:
+        # 1. Get prediction from remote API
+        prediction_text = ""
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"{REMOTE_API_URL}/predict", params={"video_url": video_url}) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    prediction_text = data.get("prediction", "")
+                else:
+                    error_text = await response.text()
+                    logger.error(f"Remote API error: {response.status} - {error_text}")
+                    return JSONResponse(content={"error": f"Remote API error: {response.status}"}, status_code=response.status)
+        
+        if not prediction_text:
+            return JSONResponse(content={"error": "No prediction received from remote API"}, status_code=400)
+
+        logger.info(f"Remote model made prediction: {prediction_text}. This will be sent to local Gemini API for translation.")
+
+        # 2. Call local Gemini API for translation
+        # Prepare the prompt for Gemini API
+        prompt = f"""You are a specialized translator for German Sign Language (DGS) glosses to English.
+
+Task: Translate the following DGS glosses into fluent, natural English.
+
+Context: DGS glosses are written representations of sign language where:
+- Words appear in their base form
+- Grammar markers are often omitted
+- Word order follows DGS syntax, not English syntax
+- Special notation may be used (e.g., POSS for possessive)
+
+Instructions:
+1. Translate the meaning, not word-for-word
+2. Use proper English grammar and sentence structure
+3. Maintain the original meaning and intent
+4. Return ONLY the translated English text, nothing else
+5. Do not include explanations, notes, or any text besides the translation
+6. Use complete, grammatically correct English sentences
+
+DGS Glosses to translate: {prediction_text}"""
+        gemini_response = await call_gemini_api(prompt)
+
+        if gemini_response and 'candidates' in gemini_response and gemini_response['candidates']:
+            translation = gemini_response['candidates'][0]['content']['parts'][0]['text'].rstrip('\n')
+            gemini_summary = await call_gemini_api(
+                f"""Make a really brief summary encapsling all the content of the following text in one sentence of between two and 4 words: {translation}""")
+            if gemini_summary and 'candidates' in gemini_summary and gemini_summary['candidates']:
+                summary = gemini_summary['candidates'][0]['content']['parts'][0]['text'].rstrip('\n')
+            return JSONResponse(content={"translation": translation,
+                                         "summary": summary if 'summary' in locals() else "No summary generated"
+                                         })
+        else:
+            return JSONResponse(content={"error": "Failed to get translation from Gemini API"}, status_code=500)
+
+    except Exception as e:
+        logger.error(f"Remote prediction error: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8082)
