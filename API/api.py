@@ -147,13 +147,13 @@ async def predict_gemini(video_url: str = Query(..., description="URL of the vid
 
         # Prepare the prompt for Gemini API
 
-        gemini_response = await glosses_to_text(prediction)
+        gemini_response = glosses_to_text(prediction)
 
         logger.info(f"Done calling Gemini API")
 
         if gemini_response:
             translation = gemini_response
-            gemini_summary = await custom_prompt(f"""Make a really brief summary encapsling all the content of the following text in one sentence of between two and 4 words: {translation}""")
+            gemini_summary = custom_prompt(f"""Make a really brief summary encapsling all the content of the following text in one sentence of between two and 4 words: {translation}""")
             if gemini_summary:
                 summary = gemini_summary
             return JSONResponse(content={"translation": translation,
@@ -179,13 +179,13 @@ async def predict_gemini_v2(video_url: str = Query(..., description="URL of the 
 
         # Prepare the prompt for Gemini API
 
-        gemini_response = await glosses_to_text(prediction)
+        gemini_response = glosses_to_text(prediction)
 
         logger.info(f"Done calling Gemini API")
 
         if gemini_response:
             translation = gemini_response
-            gemini_summary = await custom_prompt(
+            gemini_summary = custom_prompt(
                 f"""Make a really brief summary encapsling all the content of the following text in one sentence of between two and 4 words: {translation}""")
             if gemini_summary:
                 summary = gemini_summary
@@ -262,11 +262,11 @@ async def remote_predict_gemini(video_url: str = Query(..., description="URL of 
 
         logger.info(f"Remote model made prediction: {prediction_text}. This will be sent to local Gemini API for translation.")
 
-        gemini_response = await glosses_to_text(prediction_text)
+        gemini_response = glosses_to_text(prediction_text)
 
         if gemini_response:
             translation = gemini_response
-            gemini_summary = await custom_prompt(
+            gemini_summary = custom_prompt(
                 f"""Make a really brief summary encapsling all the content of the following text in one sentence of between two and 4 words: {translation}""")
             if gemini_summary:
                 summary = gemini_summary
