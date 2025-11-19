@@ -1,0 +1,24 @@
+# Core dependencies
+numpy>=1.20.3
+opencv-python>=4.5.5.64
+pandas>=1.3.4
+Pillow>=9.4.0
+PyYAML>=6.0
+scipy>=1.7.1
+six>=1.16.0
+tqdm>=4.62.3
+fvcore
+mediapipe>=0.10.0
+
+# API dependencies
+fastapi
+uvicorn
+aiohttp
+python-dotenv
+requests
+
+# PyTorch
+# Note: You should install PyTorch with CUDA support manually using the command in README.md
+# pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+torch
+torchvision
