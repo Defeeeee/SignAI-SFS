@@ -19,17 +19,18 @@ dotenv.load_dotenv(dotenv.find_dotenv())
 
 from fastapi.middleware.cors import CORSMiddleware
 
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
 # Global variables for model
 model = None
 gloss_dict = None
 device = None
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Load model on startup
-    global model, gloss_dict, device
-    print("Loading model on startup...")
-    
+def get_model_args():
     # Set paths based on system
     if platform.system() == 'Darwin':  # Mac
         base_dir = '/Users/defeee/Documents/GitHub/SignAI-SFS'
@@ -53,7 +54,7 @@ async def lifespan(app: FastAPI):
         # On ARM/Mac, using too many threads can hurt performance due to overhead
         # 4 is usually a sweet spot for M1/M2/M3 chips
         torch.set_num_threads(4)
-        print("Set torch num threads to 4 for CPU optimization")
+        logger.info("Set torch num threads to 4 for CPU optimization")
 
     args = argparse.Namespace(
         config=config_path,
@@ -61,17 +62,37 @@ async def lifespan(app: FastAPI):
         weights=weights_path,
         device=device_str
     )
-    
+    return args
+
+def load_model_global():
+    global model, gloss_dict, device
+    if model is not None:
+        return
+        
+    logger.info("Loading model...")
     try:
+        args = get_model_args()
         model, gloss_dict, device = load_model(args)
-        print("Model loaded successfully!")
+        logger.info("Model loaded successfully!")
     except Exception as e:
-        print(f"Failed to load model: {e}")
+        logger.error(f"Failed to load model: {e}")
+        raise e
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Load model on startup
+    try:
+        load_model_global()
+    except Exception as e:
+        logger.error(f"Startup model loading failed: {e}")
+        # We don't raise here to allow the app to start, 
+        # requests will try to load the model again and fail then if it persists.
         
     yield
     
     # Clean up resources
-    print("Shutting down...")
+    logger.info("Shutting down...")
+    global model
     del model
     del gloss_dict
     del device
@@ -79,6 +100,10 @@ async def lifespan(app: FastAPI):
 async def call_gemini_api(prompt: str):
     """Calls the Gemini API with the given prompt."""
     api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        logger.error("GEMINI_API_KEY not found in environment variables")
+        return None
+        
     api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
     headers = {
         "Content-Type": "application/json"
@@ -101,8 +126,8 @@ async def call_gemini_api(prompt: str):
                 return await response.json()
             else:
                 error_text = await response.text()
-                print(f"Error calling Gemini API: {response.status}")
-                print(error_text)
+                logger.error(f"Error calling Gemini API: {response.status}")
+                logger.error(error_text)
                 return None
 
 app = FastAPI(lifespan=lifespan)
@@ -116,6 +141,11 @@ def read_root():
 
 async def run_prediction_async(video_url: str):
     """Run prediction in a separate thread to avoid blocking the event loop."""
+    # Ensure model is loaded (lazy loading fallback)
+    if model is None:
+        logger.info("Model not loaded, attempting lazy load...")
+        load_model_global()
+        
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(
         None, 
@@ -130,12 +160,10 @@ async def run_prediction_async(video_url: str):
 @app.get("/predict")
 async def predict(video_url: str = Query(..., description="URL of the video to predict")):
     try:
-        if model is None:
-            return JSONResponse(content={"error": "Model not loaded"}, status_code=503)
-            
         prediction = await run_prediction_async(video_url)
         return JSONResponse(content={"prediction": prediction})
     except Exception as e:
+        logger.error(f"Prediction error: {e}")
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
 @app.get("/predict_gemini")
@@ -143,15 +171,12 @@ async def predict_gemini(video_url: str = Query(..., description="URL of the vid
     # run model prediction and then call Gemini API with the glosses and tell it to generate a natural language translation
     # the result from gemini api will be returned and its expected to be a glosses --> text translation
     try:
-        if model is None:
-            return JSONResponse(content={"error": "Model not loaded"}, status_code=503)
-            
         prediction = await run_prediction_async(video_url)
         
         if not prediction:
             return JSONResponse(content={"error": "No prediction made"}, status_code=400)
 
-        print(f"Model made prediction: {prediction}. This will be sent to Gemini API for translation.")
+        logger.info(f"Model made prediction: {prediction}. This will be sent to Gemini API for translation.")
 
         # Prepare the prompt for Gemini API
         prompt = f"""You are a specialized translator for German Sign Language (DGS) glosses to English.
@@ -175,7 +200,7 @@ Instructions:
 DGS Glosses to translate: {prediction}"""
         gemini_response = await call_gemini_api(prompt)
 
-        print(f"Done calling Gemini API")
+        logger.info(f"Done calling Gemini API")
 
         if gemini_response and 'candidates' in gemini_response and gemini_response['candidates']:
             translation = gemini_response['candidates'][0]['content']['parts'][0]['text'].rstrip('\n')
@@ -188,6 +213,7 @@ DGS Glosses to translate: {prediction}"""
         else:
             return JSONResponse(content={"error": "Failed to get translation from Gemini API, try /predict"}, status_code=500)
     except Exception as e:
+        logger.error(f"Prediction error: {e}")
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
 @app.get("/predict_gemini_de")
@@ -195,9 +221,6 @@ async def predict_gemini_de(video_url: str = Query(..., description="URL of the 
     # run model prediction and then call Gemini API with the glosses and tell it to generate a natural language translation
     # the result from gemini api will be returned and its expected to be a glosses --> text translation
     try:
-        if model is None:
-            return JSONResponse(content={"error": "Model not loaded"}, status_code=503)
-            
         prediction = await run_prediction_async(video_url)
         
         if not prediction:
@@ -231,6 +254,7 @@ DGS Glosses to translate: {prediction}"""
         else:
             return JSONResponse(content={"error": "Failed to get translation from Gemini API, try /predict"}, status_code=500)
     except Exception as e:
+        logger.error(f"Prediction error: {e}")
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
 @app.get('/v2/slowfast/predict_gemini')
@@ -238,15 +262,12 @@ async def predict_gemini_v2(video_url: str = Query(..., description="URL of the 
     # run model prediction and then call Gemini API with the glosses and tell it to generate a natural language translation
     # the result from gemini api will be returned and its expected to be a glosses --> text translation
     try:
-        if model is None:
-            return JSONResponse(content={"error": "Model not loaded"}, status_code=503)
-            
         prediction = await run_prediction_async(video_url)
         
         if not prediction:
             return JSONResponse(content={"error": "No prediction made"}, status_code=400)
 
-        print(f"Model made prediction: {prediction}. This will be sent to Gemini API for translation.")
+        logger.info(f"Model made prediction: {prediction}. This will be sent to Gemini API for translation.")
 
         # Prepare the prompt for Gemini API
         prompt = f"""You are a specialized translator for German Sign Language (DGS) glosses to English.
@@ -283,13 +304,11 @@ async def predict_gemini_v2(video_url: str = Query(..., description="URL of the 
             return JSONResponse(content={"error": "Failed to get translation from Gemini API, try /predict"},
                                 status_code=500)
     except Exception as e:
+        logger.error(f"Prediction error: {e}")
         return JSONResponse(content={"error": str(e)}, status_code=500)
 @app.get("/v2/slowfast/predict")
 async def predict_v2(video_url: str = Query(..., description="URL of the video to predict")):
     try:
-        if model is None:
-            return JSONResponse(content={"error": "Model not loaded"}, status_code=503)
-            
         prediction = await run_prediction_async(video_url)
         
         if not prediction:
@@ -297,6 +316,7 @@ async def predict_v2(video_url: str = Query(..., description="URL of the video t
 
         return JSONResponse(content={"prediction": prediction})
     except Exception as e:
+        logger.error(f"Prediction error: {e}")
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
 # forward request to localhost 8000
