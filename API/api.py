@@ -4,10 +4,77 @@ from video_predict import video_predict
 import dotenv
 import os
 import aiohttp  # For making asynchronous HTTP requests
+import asyncio
+import platform
+import argparse
+from contextlib import asynccontextmanager
+import torch
+
+# Add project root to sys.path for module import
+import sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from prediction.predict import load_model
 
 dotenv.load_dotenv(dotenv.find_dotenv())
 
 from fastapi.middleware.cors import CORSMiddleware
+
+# Global variables for model
+model = None
+gloss_dict = None
+device = None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Load model on startup
+    global model, gloss_dict, device
+    print("Loading model on startup...")
+    
+    # Set paths based on system
+    if platform.system() == 'Darwin':  # Mac
+        base_dir = '/Users/defeee/Documents/GitHub/SignAI-SFS'
+        config_path = os.path.join(base_dir, 'configs/phoenix2014-T.yaml')
+        dict_path = os.path.join(base_dir, 'preprocess/phoenix2014-T/gloss_dict.npy')
+        weights_path = os.path.join(base_dir, 'best_checkpoints/phoenix2014-T_dev_17.66_test_18.71.pt')
+    else:  # Linux or other
+        config_path = './configs/phoenix2014-T.yaml'
+        dict_path = './preprocess/phoenix2014-T/gloss_dict.npy'
+        weights_path = 'best_checkpoints/phoenix2014-T_dev_17.66_test_18.71.pt'
+        
+    # Determine device
+    device_str = 'cpu'
+    if torch.cuda.is_available():
+        device_str = 'cuda:0'
+    elif hasattr(torch, 'backends') and hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+        device_str = 'mps'
+        
+    # Set number of threads for CPU inference
+    if device_str == 'cpu':
+        # On ARM/Mac, using too many threads can hurt performance due to overhead
+        # 4 is usually a sweet spot for M1/M2/M3 chips
+        torch.set_num_threads(4)
+        print("Set torch num threads to 4 for CPU optimization")
+
+    args = argparse.Namespace(
+        config=config_path,
+        dict_path=dict_path,
+        weights=weights_path,
+        device=device_str
+    )
+    
+    try:
+        model, gloss_dict, device = load_model(args)
+        print("Model loaded successfully!")
+    except Exception as e:
+        print(f"Failed to load model: {e}")
+        
+    yield
+    
+    # Clean up resources
+    print("Shutting down...")
+    del model
+    del gloss_dict
+    del device
 
 async def call_gemini_api(prompt: str):
     """Calls the Gemini API with the given prompt."""
@@ -38,7 +105,7 @@ async def call_gemini_api(prompt: str):
                 print(error_text)
                 return None
 
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware, allow_origins=['*'],
     allow_credentials=True, allow_methods=['*'], allow_headers=['*'])
@@ -47,13 +114,26 @@ app.add_middleware(
 def read_root():
     return {"message": "Welcome to the Sign Language Prediction API. Use /predict?video_url=<url> to get predictions."}
 
-@app.get("/predict")
-def predict(video_url: str = Query(..., description="URL of the video to predict")):
-    try:
-        prediction = video_predict(
+async def run_prediction_async(video_url: str):
+    """Run prediction in a separate thread to avoid blocking the event loop."""
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        None, 
+        lambda: video_predict(
             video_url,
-            weights='best_checkpoints/phoenix2014-T_dev_17.66_test_18.71.pt'
+            model_instance=model,
+            gloss_dict_instance=gloss_dict,
+            device_instance=device
         )
+    )
+
+@app.get("/predict")
+async def predict(video_url: str = Query(..., description="URL of the video to predict")):
+    try:
+        if model is None:
+            return JSONResponse(content={"error": "Model not loaded"}, status_code=503)
+            
+        prediction = await run_prediction_async(video_url)
         return JSONResponse(content={"prediction": prediction})
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
@@ -63,10 +143,11 @@ async def predict_gemini(video_url: str = Query(..., description="URL of the vid
     # run model prediction and then call Gemini API with the glosses and tell it to generate a natural language translation
     # the result from gemini api will be returned and its expected to be a glosses --> text translation
     try:
-        prediction = video_predict(
-            video_url,
-            weights='best_checkpoints/phoenix2014-T_dev_17.66_test_18.71.pt'
-        )
+        if model is None:
+            return JSONResponse(content={"error": "Model not loaded"}, status_code=503)
+            
+        prediction = await run_prediction_async(video_url)
+        
         if not prediction:
             return JSONResponse(content={"error": "No prediction made"}, status_code=400)
 
@@ -114,10 +195,11 @@ async def predict_gemini_de(video_url: str = Query(..., description="URL of the 
     # run model prediction and then call Gemini API with the glosses and tell it to generate a natural language translation
     # the result from gemini api will be returned and its expected to be a glosses --> text translation
     try:
-        prediction = video_predict(
-            video_url,
-            weights='best_checkpoints/phoenix2014-T_dev_17.66_test_18.71.pt'
-        )
+        if model is None:
+            return JSONResponse(content={"error": "Model not loaded"}, status_code=503)
+            
+        prediction = await run_prediction_async(video_url)
+        
         if not prediction:
             return JSONResponse(content={"error": "No prediction made"}, status_code=400)
 
@@ -156,10 +238,11 @@ async def predict_gemini_v2(video_url: str = Query(..., description="URL of the 
     # run model prediction and then call Gemini API with the glosses and tell it to generate a natural language translation
     # the result from gemini api will be returned and its expected to be a glosses --> text translation
     try:
-        prediction = video_predict(
-            video_url,
-            weights='best_checkpoints/phoenix2014-T_dev_17.66_test_18.71.pt'
-        )
+        if model is None:
+            return JSONResponse(content={"error": "Model not loaded"}, status_code=503)
+            
+        prediction = await run_prediction_async(video_url)
+        
         if not prediction:
             return JSONResponse(content={"error": "No prediction made"}, status_code=400)
 
@@ -202,12 +285,13 @@ async def predict_gemini_v2(video_url: str = Query(..., description="URL of the 
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
 @app.get("/v2/slowfast/predict")
-def predict_v2(video_url: str = Query(..., description="URL of the video to predict")):
+async def predict_v2(video_url: str = Query(..., description="URL of the video to predict")):
     try:
-        prediction = video_predict(
-            video_url,
-            weights='best_checkpoints/phoenix2014-T_dev_17.66_test_18.71.pt'
-        )
+        if model is None:
+            return JSONResponse(content={"error": "Model not loaded"}, status_code=503)
+            
+        prediction = await run_prediction_async(video_url)
+        
         if not prediction:
             return JSONResponse(content={"error": "No prediction made"}, status_code=400)
 

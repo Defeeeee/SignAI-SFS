@@ -12,11 +12,12 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from prediction.predict import predict_sign
 
-def video_predict(video_url, weights, config='./configs/phoenix2014-T.yaml',
+def video_predict(video_url, weights=None, config='./configs/phoenix2014-T.yaml',
                   dict_path='./preprocess/phoenix2014-T/gloss_dict.npy', device=None,
-                  search_mode='beam', input_size=224, image_scale=1.0):
+                  search_mode='beam', input_size=224, image_scale=1.0, 
+                  model_instance=None, gloss_dict_instance=None, device_instance=None):
     """
-    Downloads a video from a URL, extracts frames using ffmpeg, predicts the sign language, and returns the predicted string.
+    Downloads a video from a URL, extracts frames using cv2 (in memory), predicts the sign language, and returns the predicted string.
     """
     # Check if the system is Mac, use absolute paths if it is
     if platform.system() == 'Darwin':  # Darwin is the system name for macOS
@@ -24,22 +25,22 @@ def video_predict(video_url, weights, config='./configs/phoenix2014-T.yaml',
         base_dir = '/Users/defeee/Documents/GitHub/SignAI-SFS'
         config = os.path.join(base_dir, 'configs/phoenix2014-T.yaml')
         dict_path = os.path.join(base_dir, 'preprocess/phoenix2014-T/gloss_dict.npy')
-    # Automatically detect the best available device
-    if device is None:
+        
+    # Automatically detect the best available device if not provided
+    if device is None and device_instance is None:
         import torch
         if torch.cuda.is_available():
             device = 'cuda:0'
-            print("Using CUDA for inference.")
+            # print("Using CUDA for inference.")
         elif hasattr(torch, 'backends') and hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
             device = 'mps'
-            print("Using MPS (Apple Silicon) for inference.")
+            # print("Using MPS (Apple Silicon) for inference.")
         else:
             device = 'cpu'
-            print("Using CPU for inference.")
+            # print("Using CPU for inference.")
+            
     temp_dir = tempfile.mkdtemp()
     video_path = os.path.join(temp_dir, f"{uuid.uuid4()}.mp4")
-    frames_dir = os.path.join(temp_dir, "frames")
-    os.makedirs(frames_dir, exist_ok=True)
 
     try:
         # Download video
@@ -49,32 +50,52 @@ def video_predict(video_url, weights, config='./configs/phoenix2014-T.yaml',
                 for chunk in r.iter_content(chunk_size=8192):
                     f.write(chunk)
 
-        # Check if ffmpeg is installed
-        if shutil.which('ffmpeg') is None:
-            raise RuntimeError("ffmpeg is not installed or not found in PATH. Please install ffmpeg to use this function.")
-
-        # Extract frames using ffmpeg
-        ffmpeg_cmd = [
-            'ffmpeg', '-i', video_path,
-            os.path.join(frames_dir, 'frame_%05d.jpg')
-        ]
-        subprocess.run(ffmpeg_cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-        # Count the number of extracted frames
-        frame_files = sorted([f for f in os.listdir(frames_dir) if f.endswith('.jpg')])
+        # Extract frames using cv2
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            raise RuntimeError(f"Could not open video file {video_path}")
+            
+        frames = []
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            frames.append(frame)
+        cap.release()
+        
+        if not frames:
+            raise RuntimeError("No frames extracted from video")
 
         # Predict sign from frames
-        prediction = predict_sign(
-            folder=frames_dir,
-            weights=weights,
-            config=config,
-            dict_path=dict_path,
-            device=device,
-            search_mode=search_mode,
-            input_size=input_size,
-            image_scale=image_scale
-        )
-        return prediction
+        # If model instance is provided, use it directly
+        if model_instance is not None and gloss_dict_instance is not None and device_instance is not None:
+            from prediction.predict import process_images, predict
+            
+            # Process images (in memory)
+            images, video_length = process_images(frames, input_size, image_scale)
+            
+            # Run prediction
+            predictions = predict(model_instance, images, video_length, device_instance, gloss_dict_instance, search_mode)
+            
+            # Return the first prediction as a string
+            if predictions and len(predictions) > 0 and predictions[0]:
+                sentence = " ".join([word for word, _ in predictions[0]])
+                return sentence
+            else:
+                return ""
+        else:
+            # Fallback to loading model (slower)
+            prediction = predict_sign(
+                folder=frames, # Pass list of frames directly
+                weights=weights,
+                config=config,
+                dict_path=dict_path,
+                device=device,
+                search_mode=search_mode,
+                input_size=input_size,
+                image_scale=image_scale
+            )
+            return prediction
     finally:
         shutil.rmtree(temp_dir)
 

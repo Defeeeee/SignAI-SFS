@@ -120,6 +120,13 @@ def load_model(args):
     model = device.model_to_device(model)
     model.eval()  # Set model to evaluation mode
 
+    # Apply dynamic quantization for CPU inference
+    if args.device == 'cpu':
+        print("Applying dynamic quantization for CPU inference...")
+        model = torch.quantization.quantize_dynamic(
+            model, {torch.nn.Linear, torch.nn.LSTM, torch.nn.GRU}, dtype=torch.qint8
+        )
+
     return model, gloss_dict, device
 
 def import_class(name):
@@ -132,21 +139,19 @@ def import_class(name):
     mod = getattr(mod, components[1])
     return mod
 
-def process_images(folder_path, input_size=224, image_scale=1.0):
+def process_images(input_source, input_size=224, image_scale=1.0):
     """
-    Process images from a folder for model prediction.
-
-    This function:
-    1. Finds all image files in the specified folder
-    2. Sorts them by name (important for temporal order)
-    3. Reads and converts them to RGB
-    4. Uses MediaPipe to detect face and nose keypoint
-    5. Centers each frame on a square around the person's nose
-    6. Applies transformations (center crop and conversion to tensor)
-    7. Normalizes the pixel values
-    8. Prepares them for model input
-
-   """
+    Process images for model prediction.
+    
+    Args:
+        input_source: Can be a folder path (str) or a list of images (numpy arrays/BGR)
+        input_size: Input size for the model
+        image_scale: Image scale factor
+        
+    Returns:
+        transformed_images: Tensor ready for model input
+        video_length: Tensor containing number of frames
+    """
     # Initialize MediaPipe Face Mesh
     mp_face_mesh = mp.solutions.face_mesh
     face_mesh = mp_face_mesh.FaceMesh(
@@ -156,25 +161,45 @@ def process_images(folder_path, input_size=224, image_scale=1.0):
         min_tracking_confidence=0.5
     )
 
-    # Get all image files with common extensions
-    extensions = ['jpg', 'jpeg', 'png', 'bmp']
-    image_files = []
-    for ext in extensions:
-        image_files.extend(glob.glob(os.path.join(folder_path, f'*.{ext}')))
-
-    if not image_files:
-        raise ValueError(f"No image files found in {folder_path}")
-
-    # Sort images by name to maintain temporal order
-    image_files = sorted(image_files)
-
-    # Read and process images
     images = []
-    for img_path in image_files:
-        img = cv2.imread(img_path)
-        if img is None:
-            print(f"Warning: Could not read image {img_path}")
-            continue
+    
+    # Handle folder path input
+    if isinstance(input_source, str) and os.path.isdir(input_source):
+        # Get all image files with common extensions
+        extensions = ['jpg', 'jpeg', 'png', 'bmp']
+        image_files = []
+        for ext in extensions:
+            image_files.extend(glob.glob(os.path.join(input_source, f'*.{ext}')))
+
+        if not image_files:
+            raise ValueError(f"No image files found in {input_source}")
+
+        # Sort images by name to maintain temporal order
+        image_files = sorted(image_files)
+        
+        # Read images
+        for img_path in image_files:
+            img = cv2.imread(img_path)
+            if img is None:
+                print(f"Warning: Could not read image {img_path}")
+                continue
+            images.append(img)
+            
+        print(f"Processed {len(images)} frames from {input_source}")
+        
+    # Handle list of images input
+    elif isinstance(input_source, list):
+        images = input_source
+        # print(f"Processing {len(images)} in-memory frames")
+    else:
+        raise ValueError("input_source must be a folder path or a list of images")
+
+    if not images:
+        raise ValueError("No valid images found")
+
+    # Process images with MediaPipe
+    processed_images = []
+    for img in images:
         # Convert from BGR (OpenCV default) to RGB
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
@@ -208,20 +233,12 @@ def process_images(folder_path, input_size=224, image_scale=1.0):
             # Crop the image to the square centered on the nose
             img = img[y1:y1+square_size, x1:x1+square_size]
 
-            #print(f"Centered frame on nose at ({nose_x}, {nose_y})")
-        # else:
-        #     #print(f"No face detected in {img_path}, using original frame")
-
-        images.append(img)
+        processed_images.append(img)
 
     # Close the MediaPipe Face Mesh
     face_mesh.close()
-
-    # show frames completed framing and how many of the total
-    print(f"Processed {len(images)} frames from {folder_path}")
-
-    if not images:
-        raise ValueError("No valid images found")
+    
+    images = processed_images
 
     # Apply transformations using the same pipeline as in training/testing
     transform = Compose([
@@ -263,7 +280,7 @@ def process_images(folder_path, input_size=224, image_scale=1.0):
         padding_needed = expected_frames - num_frames
         padding = last_frame.repeat(1, padding_needed, 1, 1, 1)
         transformed_images = torch.cat([transformed_images, padding], dim=1)
-        print(f"Added {padding_needed} padding frames to make frame count ({num_frames}) a multiple of alpha (4)")
+        # print(f"Added {padding_needed} padding frames to make frame count ({num_frames}) a multiple of alpha (4)")
 
     num_frames = transformed_images.size(1)
 
