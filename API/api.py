@@ -167,6 +167,10 @@ async def predict_gemini(video_url: str = Query(..., description="URL of the vid
 
 @app.get('/v2/slowfast/predict_gemini')
 async def predict_gemini_v2(video_url: str = Query(..., description="URL of the video to predict")):
+    return await remote_predict_gemini(video_url)
+
+
+async def run_prediction_v2(video_url: str):
     # run model prediction and then call Gemini API with the glosses and tell it to generate a natural language translation
     # the result from gemini api will be returned and its expected to be a glosses --> text translation
     try:
