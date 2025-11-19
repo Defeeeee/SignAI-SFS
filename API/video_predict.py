@@ -6,6 +6,7 @@ import uuid
 import shutil
 import requests
 import platform
+import cv2
 
 # Add project root to sys.path for module import
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
