@@ -287,7 +287,7 @@ async def remote_predict_gemini(video_url: str = Query(..., description="URL of 
 
 
 @app.get("/v3/NPU")
-async def remote_predict_gemini(video_url: str = Query(..., description="URL of the video to predict")):
+async def remote_predict_gemini2(video_url: str = Query(..., description="URL of the video to predict")):
     try:
         # 1. Get prediction from remote API
         prediction_text = ""
