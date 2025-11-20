@@ -167,7 +167,7 @@ async def predict_gemini(video_url: str = Query(..., description="URL of the vid
 
 @app.get('/v2/slowfast/predict_gemini')
 async def predict_gemini_v2(video_url: str = Query(..., description="URL of the video to predict")):
-    return await remote_predict_gemini(video_url)
+    return await remote_predict_gemini2(video_url)
 
 
 async def run_prediction_v2(video_url: str):
