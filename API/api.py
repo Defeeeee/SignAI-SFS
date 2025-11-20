@@ -124,47 +124,6 @@ async def run_prediction_async(video_url: str):
         )
     )
 
-@app.get("/predict")
-async def predict(video_url: str = Query(..., description="URL of the video to predict")):
-    try:
-        prediction = await run_prediction_async(video_url)
-        return JSONResponse(content={"prediction": prediction})
-    except Exception as e:
-        logger.error(f"Prediction error: {e}")
-        return JSONResponse(content={"error": str(e)}, status_code=500)
-
-@app.get("/predict_gemini")
-async def predict_gemini(video_url: str = Query(..., description="URL of the video to predict")):
-    # run model prediction and then call Gemini API with the glosses and tell it to generate a natural language translation
-    # the result from gemini api will be returned and its expected to be a glosses --> text translation
-    try:
-        prediction = await run_prediction_async(video_url)
-        
-        if not prediction:
-            return JSONResponse(content={"error": "No prediction made"}, status_code=400)
-
-        logger.info(f"Model made prediction: {prediction}. This will be sent to Gemini API for translation.")
-
-        # Prepare the prompt for Gemini API
-
-        gemini_response = glosses_to_text(prediction)
-
-        logger.info(f"Done calling Gemini API")
-
-        if gemini_response:
-            translation = gemini_response
-            gemini_summary = custom_prompt(f"""Make a really brief summary encapsling all the content of the following text in one sentence of between two and 4 words: {translation}""")
-            if gemini_summary:
-                summary = gemini_summary
-            return JSONResponse(content={"translation": translation,
-                                         "summary": summary if 'summary' in locals() else "No summary generated"
-                                         })
-        else:
-            return JSONResponse(content={"error": "Failed to get translation from Gemini API, try /predict"}, status_code=500)
-    except Exception as e:
-        logger.error(f"Prediction error: {e}")
-        return JSONResponse(content={"error": str(e)}, status_code=500)
-
 @app.get('/v2/slowfast/predict_gemini')
 async def predict_gemini_v2(video_url: str = Query(..., description="URL of the video to predict")):
     return await remote_predict_gemini(video_url)
