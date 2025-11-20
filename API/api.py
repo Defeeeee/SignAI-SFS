@@ -171,8 +171,6 @@ async def predict_gemini_v2(video_url: str = Query(..., description="URL of the 
 
 
 async def run_prediction_v2(video_url: str):
-    # run model prediction and then call Gemini API with the glosses and tell it to generate a natural language translation
-    # the result from gemini api will be returned and its expected to be a glosses --> text translation
     try:
         prediction = await run_prediction_async(video_url)
 
