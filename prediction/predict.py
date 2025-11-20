@@ -118,6 +118,12 @@ def load_model(args):
         args.device = 'cpu'
     device.set_device(args.device)
     model = device.model_to_device(model)
+    
+    # Use FP16 for CUDA
+    if 'cuda' in args.device:
+        print("Converting model to half precision (FP16) for CUDA...")
+        model.half()
+        
     model.eval()  # Set model to evaluation mode
 
     # Apply dynamic quantization for CPU inference
@@ -161,83 +167,78 @@ def process_images(input_source, input_size=224, image_scale=1.0):
         min_tracking_confidence=0.5
     )
 
-    images = []
-    
-    # Handle folder path input
-    if isinstance(input_source, str) and os.path.isdir(input_source):
-        # Get all image files with common extensions
-        extensions = ['jpg', 'jpeg', 'png', 'bmp']
-        image_files = []
-        for ext in extensions:
-            image_files.extend(glob.glob(os.path.join(input_source, f'*.{ext}')))
-
-        if not image_files:
-            raise ValueError(f"No image files found in {input_source}")
-
-        # Sort images by name to maintain temporal order
-        image_files = sorted(image_files)
-        
-        # Read images
-        for img_path in image_files:
-            img = cv2.imread(img_path)
-            if img is None:
-                print(f"Warning: Could not read image {img_path}")
-                continue
-            images.append(img)
-            
-        print(f"Processed {len(images)} frames from {input_source}")
-        
-    # Handle list of images input
-    elif isinstance(input_source, list):
-        images = input_source
-        # print(f"Processing {len(images)} in-memory frames")
-    else:
-        raise ValueError("input_source must be a folder path or a list of images")
-
-    if not images:
-        raise ValueError("No valid images found")
-
-    # Process images with MediaPipe
     processed_images = []
-    for img in images:
-        # Convert from BGR (OpenCV default) to RGB
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
-        # Process the image with MediaPipe Face Mesh
-        results = face_mesh.process(img)
+    try:
+        # Handle folder path input
+        if isinstance(input_source, str) and os.path.isdir(input_source):
+            # Get all image files with common extensions
+            extensions = ['jpg', 'jpeg', 'png', 'bmp']
+            image_files = []
+            for ext in extensions:
+                image_files.extend(glob.glob(os.path.join(input_source, f'*.{ext}')))
 
-        # If face landmarks are detected, center the frame on the nose
-        if results.multi_face_landmarks:
-            # Get the nose tip landmark (index 1)
-            nose_landmark = results.multi_face_landmarks[0].landmark[1]
+            if not image_files:
+                raise ValueError(f"No image files found in {input_source}")
 
-            # Get image dimensions
-            h, w, _ = img.shape
+            # Sort images by name to maintain temporal order
+            image_files = sorted(image_files)
+            
+            # Read and process images one by one to save memory
+            for img_path in image_files:
+                img = cv2.imread(img_path)
+                if img is None:
+                    print(f"Warning: Could not read image {img_path}")
+                    continue
+                
+                # Process immediately
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                results = face_mesh.process(img)
 
-            # Calculate nose position in pixels
-            nose_x, nose_y = int(nose_landmark.x * w), int(nose_landmark.y * h)
+                if results.multi_face_landmarks:
+                    nose_landmark = results.multi_face_landmarks[0].landmark[1]
+                    h, w, _ = img.shape
+                    nose_x, nose_y = int(nose_landmark.x * w), int(nose_landmark.y * h)
+                    square_size = min(h, w)
+                    x1 = max(0, nose_x - square_size // 2)
+                    y1 = max(0, nose_y - square_size // 2)
+                    if x1 + square_size > w: x1 = w - square_size
+                    if y1 + square_size > h: y1 = h - square_size
+                    img = img[y1:y1+square_size, x1:x1+square_size]
+                
+                processed_images.append(img)
+                
+            print(f"Processed {len(processed_images)} frames from {input_source}")
+            
+        # Handle list/iterable of images input
+        elif not isinstance(input_source, str):
+            # Process in-memory list or generator
+            for img in input_source:
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                results = face_mesh.process(img)
 
-            # Calculate the square size (use the smaller dimension to ensure the square fits)
-            square_size = min(h, w)
+                if results.multi_face_landmarks:
+                    nose_landmark = results.multi_face_landmarks[0].landmark[1]
+                    h, w, _ = img.shape
+                    nose_x, nose_y = int(nose_landmark.x * w), int(nose_landmark.y * h)
+                    square_size = min(h, w)
+                    x1 = max(0, nose_x - square_size // 2)
+                    y1 = max(0, nose_y - square_size // 2)
+                    if x1 + square_size > w: x1 = w - square_size
+                    if y1 + square_size > h: y1 = h - square_size
+                    img = img[y1:y1+square_size, x1:x1+square_size]
+                
+                processed_images.append(img)
+        else:
+            raise ValueError("input_source must be a folder path or a list/iterable of images")
 
-            # Calculate the top-left corner of the square centered on the nose
-            x1 = max(0, nose_x - square_size // 2)
-            y1 = max(0, nose_y - square_size // 2)
-
-            # Adjust if the square goes beyond the image boundaries
-            if x1 + square_size > w:
-                x1 = w - square_size
-            if y1 + square_size > h:
-                y1 = h - square_size
-
-            # Crop the image to the square centered on the nose
-            img = img[y1:y1+square_size, x1:x1+square_size]
-
-        processed_images.append(img)
-
-    # Close the MediaPipe Face Mesh
-    face_mesh.close()
+    finally:
+        # Close the MediaPipe Face Mesh
+        face_mesh.close()
     
+    if not processed_images:
+        raise ValueError("No valid images found or processed")
+
     images = processed_images
 
     # Apply transformations using the same pipeline as in training/testing
@@ -302,6 +303,10 @@ def predict(model, images, video_length, device, gloss_dict, search_mode='max'):
     # Move data to the appropriate device (GPU/CPU)
     images = device.data_to_device(images)
     video_length = device.data_to_device(video_length)
+
+    # Convert input to half precision if model is on CUDA
+    if isinstance(device, GpuDataParallel) and isinstance(device.output_device, int): # Check if using CUDA (int index)
+         images = images.half()
 
     # Run inference with gradient calculation disabled
     with torch.no_grad():

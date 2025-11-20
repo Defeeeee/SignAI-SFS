@@ -47,21 +47,22 @@ def video_predict(video_url, weights=None, config=None,
                 for chunk in r.iter_content(chunk_size=8192):
                     f.write(chunk)
 
-        # Extract frames using cv2
-        cap = cv2.VideoCapture(video_path)
-        if not cap.isOpened():
-            raise RuntimeError(f"Could not open video file {video_path}")
+        # Define frame generator
+        def frame_generator():
+            cap = cv2.VideoCapture(video_path)
+            if not cap.isOpened():
+                raise RuntimeError(f"Could not open video file {video_path}")
             
-        frames = []
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
-            frames.append(frame)
-        cap.release()
-        
-        if not frames:
-            raise RuntimeError("No frames extracted from video")
+            try:
+                while True:
+                    ret, frame = cap.read()
+                    if not ret:
+                        break
+                    yield frame
+            finally:
+                cap.release()
+
+        frames = frame_generator()
 
         # Predict sign from frames
         # If model instance is provided, use it directly
