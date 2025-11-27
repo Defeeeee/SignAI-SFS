@@ -10,6 +10,8 @@ jobs:
   deploy-to-server:
     environment:
       name: production
+      # This automatically sets the deployment status URL on success
+      url: ${{ secrets.PRODUCTION_URL }}
 
     runs-on: ubuntu-latest
 
@@ -24,62 +26,4 @@ jobs:
         username: ${{ secrets.SERVER_USER }}
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         script: |
-          /bin/bash /path/to/SignAI-SFS/deploy.sh
-          
-    - name: Set Production URL for Deployment Status
-      # do not reference secrets in the if: expression (secrets can't be used there)
-      if: success()
-      env:
-        PRODUCTION_URL: ${{ secrets.PRODUCTION_URL }}
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        # If PRODUCTION_URL is not set, skip updating deployment status.
-        if [ -z "$PRODUCTION_URL" ]; then
-          echo "PRODUCTION_URL not set; skipping deployment status update."
-          exit 0
-        fi
-
-        # Attempt to find deployment ID for this run's commit
-        # Uses 'gh' if available for convenience; if not available you can use curl + GITHUB_TOKEN.
-        if command -v gh >/dev/null 2>&1; then
-          deployment_id=$(gh api \
-            -H "Accept: application/vnd.github.v3+json" \
-            /repos/$GITHUB_REPOSITORY/deployments \
-            -f environment='production' \
-            -f ref='${{ github.sha }}' \
-            --jq '.[0].id' || true)
-        else
-          echo "gh CLI not found; querying deployments via curl"
-          deployment_id=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
-            -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/$GITHUB_REPOSITORY/deployments?environment=production&ref=${GITHUB_SHA}" \
-            | jq -r '.[0].id' || true)
-        fi
-
-        if [ -n "$deployment_id" ] && [ "$deployment_id" != "null" ]; then
-          if command -v gh >/dev/null 2>&1; then
-            gh api \
-              --method POST \
-              -H "Accept: application/vnd.github.v3+json" \
-              /repos/$GITHUB_REPOSITORY/deployments/$deployment_id/statuses \
-              -f state='success' \
-              -f environment_url="$PRODUCTION_URL" \
-              -f log_url='${{ github.event.deployment.url }}' \
-              -f description='Deployment successful'
-          else
-            curl -s -X POST \
-              -H "Authorization: token $GITHUB_TOKEN" \
-              -H "Accept: application/vnd.github.v3+json" \
-              "https://api.github.com/repos/$GITHUB_REPOSITORY/deployments/$deployment_id/statuses" \
-              -d @- <<EOF
-{
-  "state": "success",
-  "environment_url": "$PRODUCTION_URL",
-  "log_url": "${{ github.event.deployment.url }}",
-  "description": "Deployment successful"
-}
-EOF
-          fi
-        else
-          echo "No deployment found for environment 'production' and ref '${GITHUB_SHA}', skipping status update."
-        fi
+          /bin/bash /scripts/SignAI-SFS/deploy.sh
