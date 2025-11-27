@@ -8,14 +8,20 @@ on:
 
 jobs:
   deploy-to-server:
+    runs-on: ubuntu-latest
+    
+    # 2. Reference the step output here. 
+    # GitHub evaluates this at the end of the job, so the link will appear on success.
     environment:
       name: production
-      # This automatically sets the deployment status URL on success
-      url: ${{ secrets.PRODUCTION_URL }}
-
-    runs-on: ubuntu-latest
+      url: ${{ steps.get-url.outputs.url }}
 
     steps:
+    # 1. Create a step to expose the secret safely as an output
+    - name: Set Environment URL
+      id: get-url
+      run: echo "url=${{ secrets.PRODUCTION_URL }}" >> $GITHUB_OUTPUT
+
     - name: Checkout repository code
       uses: actions/checkout@v3
       
