@@ -1,0 +1,35 @@
+name: Sync And Deploy to Server
+
+on:
+  push:
+    branches:
+      - main
+  # Optional: Allows manual deployment from the GitHub Actions tab
+  workflow_dispatch:
+
+jobs:
+  deploy-to-server:
+    # 1. Define the environment. This is what enables GitHub Deployment tracking
+    # and shows the deployment status under the "Environments" tab on GitHub.
+    environment:
+      name: production
+      # This URL shows up as a "View deployment" button on GitHub
+      url: ${{ secrets.PRODUCTION_URL }}
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository code
+      uses: actions/checkout@v3
+      
+    # 2. Use a dedicated SSH action for secure connection and command execution
+    - name: Run Remote Deployment Script
+      uses: appleboy/ssh-action@v1.0.1
+      with:
+        host: ${{ secrets.SERVER_IP }}
+        username: ${{ secrets.SERVER_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        # The complex deployment logic is moved to a script on the remote server
+        # REMEMBER TO UPDATE THE PATH BELOW to match where deploy.sh lives!
+        script: |
+          /bin/bash /scripts/SignAI-SFS/deploy.sh
