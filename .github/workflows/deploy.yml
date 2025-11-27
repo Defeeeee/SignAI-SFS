@@ -9,12 +9,10 @@ on:
 
 jobs:
   deploy-to-server:
-    # 1. Define the environment. This is what enables GitHub Deployment tracking
-    # and shows the deployment status under the "Environments" tab on GitHub.
+    # 1. Define the environment. This is still necessary to enable GitHub Deployment tracking.
     environment:
       name: production
-      # This URL shows up as a "View deployment" button on GitHub
-      url: ${{ secrets.PRODUCTION_URL }}
+      # The problematic 'url: ${{ secrets.PRODUCTION_URL }}' line is removed.
 
     runs-on: ubuntu-latest
 
@@ -32,4 +30,32 @@ jobs:
         # The complex deployment logic is moved to a script on the remote server
         # REMEMBER TO UPDATE THE PATH BELOW to match where deploy.sh lives!
         script: |
-          /bin/bash /scripts/SignAI-SFS/deploy.sh
+          /bin/bash /path/to/SignAI-SFS/deploy.sh
+          
+    # 3. Add a step to set the deployment URL using the GitHub CLI/API
+    # This step is executed ONLY if the previous steps (the deployment) succeeded.
+    - name: Set Production URL for Deployment Status
+      if: success() && secrets.PRODUCTION_URL != ''
+      run: |
+        # Use a temporary token for this step only (GITHUB_TOKEN is automatically provided)
+        # Find the deployment ID associated with the current workflow run
+        deployment_id=$(gh api \
+          -H "Accept: application/vnd.github.v3+json" \
+          /repos/$GITHUB_REPOSITORY/deployments \
+          -f environment='production' \
+          -f ref='${{ github.sha }}' \
+          --jq '.[0].id')
+        
+        # Update the deployment status to 'success' and include the URL
+        if [ ! -z "$deployment_id" ]; then
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github.v3+json" \
+            /repos/$GITHUB_REPOSITORY/deployments/$deployment_id/statuses \
+            -f state='success' \
+            -f environment_url='${{ secrets.PRODUCTION_URL }}' \
+            -f log_url='${{ github.event.deployment.url }}' \
+            -f description='Deployment successful'
+        fi
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
