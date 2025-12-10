@@ -5,6 +5,7 @@ import shutil
 import requests
 import cv2
 import logging
+import asyncio
 from .model import get_model_components, load_model_global
 from .config import get_model_args
 
@@ -91,3 +92,11 @@ def video_predict(video_url, search_mode='beam', input_size=224, image_scale=1.0
             return prediction
     finally:
         shutil.rmtree(temp_dir)
+
+async def run_prediction_async(video_url: str):
+    """Run prediction in a separate thread to avoid blocking the event loop."""
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        None, 
+        lambda: video_predict(video_url)
+    )
