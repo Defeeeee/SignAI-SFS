@@ -9,7 +9,7 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from api_core.app import create_app
-from api_core.endpoints import run_prediction_async
+from api_core.prediction import run_prediction_async
 from api_core.gemini import process_video_translation
 
 dotenv.load_dotenv(dotenv.find_dotenv())
