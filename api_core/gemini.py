@@ -152,3 +152,39 @@ async def custom_prompt_async(prompt):
     if response and 'candidates' in response and response['candidates']:
         return response['candidates'][0]['content']['parts'][0]['text'].rstrip('\n')
     return None
+
+async def process_video_translation(prediction_text: str, target_language: str = "English"):
+    """
+    High-level function to process the translation flow:
+    1. Translate glosses to text (async preferred, sync fallback).
+    2. Generate summary (if English).
+    3. Return result dict.
+    """
+    if not prediction_text:
+        return None
+
+    # Use async version if available, otherwise sync
+    # Note: sync version currently doesn't support target_language, assuming English/default
+    gemini_response = await glosses_to_text_async(prediction_text, target_language)
+    if gemini_response is None:
+         gemini_response = glosses_to_text_sync(prediction_text)
+
+    if not gemini_response:
+        return None
+
+    result = {"translation": gemini_response}
+
+    # Only generate summary for English for now, as per original code structure
+    if target_language == "English":
+        summary_prompt = f"Make a really brief summary encapsling all the content of the following text in one sentence of between two and 4 words: {gemini_response}"
+        gemini_summary = await custom_prompt_async(summary_prompt)
+        
+        if gemini_summary is None:
+            gemini_summary = custom_prompt_sync(summary_prompt)
+
+        if gemini_summary:
+            result["summary"] = gemini_summary
+        else:
+            result["summary"] = "No summary generated"
+
+    return result
