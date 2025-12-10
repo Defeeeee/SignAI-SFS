@@ -1,11 +1,12 @@
-from api_core.app import create_app
-import dotenv
-import os
-import logging
 import sys
+import os
 
 # Add project root to sys.path for module import
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from api_core.app import create_app
+import dotenv
+import logging
 
 dotenv.load_dotenv(dotenv.find_dotenv())
 
