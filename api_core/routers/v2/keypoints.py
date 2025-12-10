@@ -1,12 +1,13 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, HTTPException
 from fastapi.responses import JSONResponse
 import logging
+from api_core.schemas import ErrorResponse
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-@router.get("/v2/keypoints/predict")
+@router.get("/keypoints/predict", responses={500: {"model": ErrorResponse}})
 def predict_v2_keypoints(video_url: str = Query(..., description="URL of the video to predict")):
     try:
         import requests
@@ -14,6 +15,8 @@ def predict_v2_keypoints(video_url: str = Query(..., description="URL of the vid
         if response.status_code == 200:
             return JSONResponse(content=response.json())
         else:
-            return JSONResponse(content={"error": "Failed to get prediction from keypoints API"}, status_code=500)
+            raise HTTPException(status_code=500, detail="Failed to get prediction from keypoints API")
+    except HTTPException:
+        raise
     except Exception as e:
-        return JSONResponse(content={"error": str(e)}, status_code=500)
+        raise HTTPException(status_code=500, detail=str(e))
