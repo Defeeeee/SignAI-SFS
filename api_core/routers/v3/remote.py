@@ -13,7 +13,7 @@ router = APIRouter()
 REMOTE_API_URL = "http://100.71.0.60:8082"
 REMOTE_2_API_URL = "http://100.102.136.67:8082"
 
-@router.get("/GPU/predict", response_model=PredictionResponse, responses={500: {"model": ErrorResponse}})
+@router.get("/GPU/glosses", response_model=PredictionResponse, responses={500: {"model": ErrorResponse}})
 async def remote_predict(video_url: str = Query(..., description="URL of the video to predict")):
     try:
         async with aiohttp.ClientSession() as session:
