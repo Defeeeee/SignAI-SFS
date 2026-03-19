@@ -45,7 +45,7 @@ def glosses_to_text(glosses):
 
     try:
         response = client.models.generate_content(
-            model="gemini-2.5-flash-lite", contents=prompt
+            model="gemini-3.1-flash-lite", contents=prompt
         )
         return response.text
     except Exception as e:
@@ -58,7 +58,7 @@ def custom_prompt(prompt):
         return None
     try:
         response = client.models.generate_content(
-            model="gemini-2.5-flash-lite", contents=prompt
+            model="gemini-3.1-flash-lite", contents=prompt
         )
         return response.text
     except Exception as e:
