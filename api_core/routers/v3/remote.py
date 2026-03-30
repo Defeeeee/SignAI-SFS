@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # Remote prediction endpoints
-REMOTE_API_URL = "http://100.71.0.60:8082"
+REMOTE_API_URL = "http://100.112.141.102:8082"
 REMOTE_2_API_URL = "http://100.102.136.67:8082"
 
 @router.get("/GPU/glosses", response_model=PredictionResponse, responses={500: {"model": ErrorResponse}})
